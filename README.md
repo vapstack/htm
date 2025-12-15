@@ -262,7 +262,7 @@ The following contract should be respected:
 
 Nodes can be marked as "owned" to prevent them from being returned to the pool
 (and prevent their subtree from being pooled).
-This might be usefull for long-lived fragments or custom pooling strategies.
+This might be useful for long-lived fragments or custom pooling strategies.
 
 Automatic pooling can be completely disabled by setting `NoPool`.
 
