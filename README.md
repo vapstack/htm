@@ -224,7 +224,7 @@ htm.TextValue(htm.Int(42))
 
 ## Tags & Attribute Helpers
 
-The package includes a large set of helper functions for standard HTML tags and attributes.
+The package includes a large set of helper functions for standard HTML tags and attributes.\
 Please refer to the [documentation](https://godoc.org/github.com/vapstack/htm) for a complete list.
 
 ## Safety notes
@@ -255,7 +255,7 @@ The following contract should be respected:
 
 - **Release only the root**: call `.Release()` only on the root node.\
   Package automatically handles the recursive release of all child nodes, attributes, and connected structures.
-  Calling release on an already realsed node will result in panic or a corrupted pool.\
+  Calling release on an already released node will result in panic or a corrupted pool.
 
 * **Do not reuse released nodes**: once released, a node may be
     immediately reused by another goroutine.
