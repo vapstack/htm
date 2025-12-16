@@ -1694,7 +1694,7 @@ func (cm *classMap) reset() {
 	clear(cm.m)
 }
 
-func (cm *classMap) get(name string) bool {
+func (cm *classMap) has(name string) bool {
 	if idx, ok := cm.m[name]; ok {
 		return cm.o[idx].active
 	}
@@ -1708,8 +1708,6 @@ func (cm *classMap) extract(name string) bool {
 	}
 	return false
 }
-
-func (cm *classMap) has(name string) bool { return cm.get(name) }
 
 func (cm *classMap) hasAny(names ...string) bool {
 	for _, name := range names {
