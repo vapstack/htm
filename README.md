@@ -281,6 +281,27 @@ due to more function calls and allocation of values captured by closures.
 However, in many real-world cases (constants, inlining, pre-allocated pointers, non-capturing functions),
 this overhead is negligible.
 
+## Benchmarks
+
+There are several benchmarks in the test file, 
+but for a realistic assessment, it is better to build and test your own trees.
+
+```go
+root := Div(
+    Class("flex flex-col items-center p-7 rounded-2xl"),
+    Attr("id", "root"),
+    Content(
+        Span(Class("a b c"), Content(Text("hello"))),
+        Span(Attr("data-x", "1"), Content(Text("world"))),
+    ),
+)
+```
+Building and rendering the tree above on a laptop with Ryzen 9 5900HX takes:
+```
+Benchmark_Build-16          2057107     574.3 ns/op     0 B/op     0 allocs/op
+Benchmark_Render-16         2459556     486.4 ns/op     0 B/op     0 allocs/op
+Benchmark_BuildRender-16     959235    1133 ns/op       0 B/op     0 allocs/op
+```
 
 ## Contribution
 

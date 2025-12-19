@@ -252,175 +252,21 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 
 /**/
 
-func Benchmark_Render_SimpleTree(b *testing.B) {
-	root := Div().
-		Class("flex flex-col items-center p-7 rounded-2xl").
-		Attr("id", "root").
-		Content(
-			Build("span").Class("a b c").Text("hello"),
-			Build("span").Attr("data-x", "1").Text("world"),
-		)
-	defer root.Release()
-
-	var buf bytes.Buffer
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		if err := root.Render(&buf); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func Benchmark_Render_SimpleTree_Mods(b *testing.B) {
-	root := Div(
-		Class("flex flex-col items-center p-7 rounded-2xl"),
-		Attr("id", "root"),
-		Content(
-			Span(
-				Class("a b c"),
-				Content(Text("hello")),
-			),
-			Span(
-				Attr("data-x", "1"),
-				Content(Text("world")),
-			),
-		),
-	)
-	defer root.Release()
-
-	var buf bytes.Buffer
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		if err := root.Render(&buf); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func Benchmark_Render_TreeFullCycle(b *testing.B) {
-
-	buf := new(bytes.Buffer)
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	fn := func(buf *bytes.Buffer) {
-		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").
-			Content(
-				Span().Class("a b c").Text("hello"),
-				Span().Attr("data-x", "1").Text("world"),
-				Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-					Span().Class("a b c").Text("hello"),
-					Span().Attr("data-x", "1").Text("world"),
-					Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-						Span().Class("a b c").Text("hello"),
-						Span().Attr("data-x", "1").Text("world"),
-					),
-				),
-			)
-		defer n.Release()
-
-		if err := n.Render(buf); err != nil {
-			b.Fatal(err)
-		}
-	}
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		fn(buf)
-	}
-}
-
 func Benchmark_Build(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	fn := func() {
-		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").
-			Content(
-				Span().Class("a b c").Text("hello"),
-				Span().Attr("data-x", "1").Text("world"),
-				Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-					Span().Class("a b c").Text("hello"),
-					Span().Attr("data-x", "1").Text("world"),
-					Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-						Span().Class("a b c").Text("hello"),
-						Span().Attr("data-x", "1").Text("world"),
-					),
-				),
-			)
+		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
+			Span().Class("a b c").Text("hello"),
+			Span().Attr("data-x", "1").Text("world"),
+		)
 		defer n.Release()
 	}
 
 	for i := 0; i < b.N; i++ {
 		fn()
-	}
-}
-
-func Benchmark_Render_TreeFullCycle_Mods(b *testing.B) {
-	buf := new(bytes.Buffer)
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	fn := func(buf *bytes.Buffer) {
-		n := Div(
-			Class("flex flex-col items-center p-7 rounded-2xl"),
-			Attr("id", "root"),
-			Content(
-				Span(
-					Class("a b c"),
-					Content(Text("hello")),
-				),
-				Span(
-					Attr("data-x", "1"),
-					Content(Text("world")),
-				),
-				Div(
-					Class("flex flex-col items-center p-7 rounded-2xl"),
-					Attr("id", "root"),
-					Content(
-						Span(
-							Class("a b c"),
-							Content(Text("hello")),
-						),
-						Span(
-							Attr("data-x", "1"),
-							Content(Text("world")),
-						),
-						Div(
-							Class("flex flex-col items-center p-7 rounded-2xl"),
-							Attr("id", "root"),
-							Content(
-								Span(
-									Class("a b c"),
-									Content(Text("hello")),
-								),
-								Span(
-									Attr("data-x", "1"),
-									Content(Text("world")),
-								),
-							),
-						),
-					),
-				),
-			),
-		)
-		defer n.Release()
-
-		if err := n.Render(buf); err != nil {
-			b.Fatal(err)
-		}
-	}
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		fn(buf)
 	}
 }
 
@@ -434,42 +280,8 @@ func Benchmark_Build_Mods(b *testing.B) {
 			Class("flex flex-col items-center p-7 rounded-2xl"),
 			Attr("id", "root"),
 			Content(
-				Span(
-					Class("a b c"),
-					Content(Text("hello")),
-				),
-				Span(
-					Attr("data-x", "1"),
-					Content(Text("world")),
-				),
-				Div(
-					Class("flex flex-col items-center p-7 rounded-2xl"),
-					Attr("id", "root"),
-					Content(
-						Span(
-							Class("a b c"),
-							Content(Text("hello")),
-						),
-						Span(
-							Attr("data-x", "1"),
-							Content(Text("world")),
-						),
-						Div(
-							Class("flex flex-col items-center p-7 rounded-2xl"),
-							Attr("id", "root"),
-							Content(
-								Span(
-									Class("a b c"),
-									Content(Text("hello")),
-								),
-								Span(
-									Attr("data-x", "1"),
-									Content(Text("world")),
-								),
-							),
-						),
-					),
-				),
+				Span(Class("a b c"), Content(Text("hello"))),
+				Span(Attr("data-x", "1"), Content(Text("world"))),
 			),
 		)
 		defer n.Release()
@@ -477,6 +289,99 @@ func Benchmark_Build_Mods(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		fn()
+	}
+}
+
+func Benchmark_Render(b *testing.B) {
+	n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
+		Span().Class("a b c").Text("hello"),
+		Span().Attr("data-x", "1").Text("world"),
+	)
+	defer n.Release()
+
+	var buf bytes.Buffer
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		if err := n.Render(&buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func Benchmark_Render_Mods(b *testing.B) {
+	n := Div(
+		Class("flex flex-col items-center p-7 rounded-2xl"),
+		Attr("id", "root"),
+		Content(
+			Span(Class("a b c"), Content(Text("hello"))),
+			Span(Attr("data-x", "1"), Content(Text("world"))),
+		),
+	)
+	defer n.Release()
+
+	var buf bytes.Buffer
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		if err := n.Render(&buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func Benchmark_BuildRender(b *testing.B) {
+
+	buf := new(bytes.Buffer)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	fn := func(buf *bytes.Buffer) {
+		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
+			Span().Class("a b c").Text("hello"),
+			Span().Attr("data-x", "1").Text("world"),
+		)
+		defer n.Release()
+
+		if err := n.Render(buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		fn(buf)
+	}
+}
+
+func Benchmark_BuildRender_Mods(b *testing.B) {
+	buf := new(bytes.Buffer)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	fn := func(buf *bytes.Buffer) {
+		n := Div(
+			Class("flex flex-col items-center p-7 rounded-2xl"),
+			Attr("id", "root"),
+			Content(
+				Span(Class("a b c"), Content(Text("hello"))),
+				Span(Attr("data-x", "1"), Content(Text("world"))),
+			),
+		)
+		defer n.Release()
+
+		if err := n.Render(buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		fn(buf)
 	}
 }
 
