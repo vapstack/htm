@@ -287,14 +287,11 @@ There are several benchmarks in the test file,
 but for a realistic assessment, it is better to build and test your own trees.
 
 ```go
-root := Div(
-    Class("flex flex-col items-center p-7 rounded-2xl"),
-    Attr("id", "root"),
+htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").
     Content(
-        Span(Class("a b c"), Content(Text("hello"))),
-        Span(Attr("data-x", "1"), Content(Text("world"))),
-    ),
-)
+        htm.Span().Class("a b c").Text("hello"),
+        htm.Span().Attr("data-x", "1").Text("world"),
+    )
 ```
 Building and rendering the tree above on a laptop with Ryzen 9 5900HX takes:
 ```
