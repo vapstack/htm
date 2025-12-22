@@ -3,6 +3,8 @@
 [![GoDoc](https://godoc.org/github.com/vapstack/htm?status.svg)](https://godoc.org/github.com/vapstack/htm)
 [![License](https://img.shields.io/badge/license-Apache2-blue.svg)](https://raw.githubusercontent.com/vapstack/htm/master/LICENSE)
 
+> This package should be considered experimental.
+
 A relatively fast, zero-allocation HTML tree builder and renderer for Go.
 
 It provides an allocation-conscious `Node` type with a fluent method API and an optional functional API
