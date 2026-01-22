@@ -524,3 +524,163 @@ func Benchmark_Compare_RawString(b *testing.B) {
 		_, _ = buf.WriteTo(io.Discard)
 	}
 }
+
+/**/
+
+func buildBenchPage(rows int) *Node {
+	return Div().
+		Class("min-h-screen bg-gray-50").
+		Attr("id", "root").
+		Content(
+			Header().Class("sticky top-0 z-10 bg-white border-b").Content(
+				Div().Class("mx-auto max-w-6xl px-6 py-4 flex items-center justify-between").Content(
+					Div().Class("flex items-center gap-3").Content(
+						Span().Class("text-xl font-semibold").Text("Acme"),
+						Span().Class("text-sm text-gray-500").Text("Dashboard"),
+					),
+					Div().Class("flex items-center gap-3").Content(
+						A().Class("text-sm text-blue-600 hover:underline").Href("#").Text("Docs"),
+						A().Class("text-sm text-blue-600 hover:underline").Href("#").Text("Support"),
+						Span().Class("inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm").Text("alice@acme.test"),
+					),
+				),
+			),
+
+			Div().Class("mx-auto max-w-6xl px-6 py-8 grid grid-cols-12 gap-6").Content(
+				Aside().Class("col-span-3").Content(
+					Nav().Class("rounded-2xl bg-white border p-4").Content(
+						Div().Class("text-xs font-semibold text-gray-500 mb-3").Text("NAVIGATION"),
+						Ul().Class("space-y-2").Content(
+							Li().Content(A().Class("block rounded-lg px-3 py-2 bg-blue-50 text-blue-700").Href("#").Text("Overview")),
+							Li().Content(A().Class("block rounded-lg px-3 py-2 hover:bg-gray-50").Href("#").Text("Users")),
+							Li().Content(A().Class("block rounded-lg px-3 py-2 hover:bg-gray-50").Href("#").Text("Billing")),
+							Li().Content(A().Class("block rounded-lg px-3 py-2 hover:bg-gray-50").Href("#").Text("Settings")),
+						),
+					),
+				),
+
+				// Main
+				Main().Class("col-span-9 space-y-6").Content(
+					// Summary cards
+					Div().Class("grid grid-cols-3 gap-4").Content(
+						Div().Class("rounded-2xl bg-white border p-5").Content(
+							Div().Class("text-sm text-gray-500").Text("Active users"),
+							Div().Class("mt-2 text-2xl font-semibold").Text("1,284"),
+							Div().Class("mt-1 text-xs text-green-600").Text("+8.2% this week"),
+						),
+						Div().Class("rounded-2xl bg-white border p-5").Content(
+							Div().Class("text-sm text-gray-500").Text("Revenue"),
+							Div().Class("mt-2 text-2xl font-semibold").Text("$32,140"),
+							Div().Class("mt-1 text-xs text-green-600").Text("+3.1% this week"),
+						),
+						Div().Class("rounded-2xl bg-white border p-5").Content(
+							Div().Class("text-sm text-gray-500").Text("Churn"),
+							Div().Class("mt-2 text-2xl font-semibold").Text("1.7%"),
+							Div().Class("mt-1 text-xs text-red-600").Text("+0.3pp this week"),
+						),
+					),
+
+					// Table card
+					Section().Class("rounded-2xl bg-white border").Content(
+						Div().Class("px-6 py-4 border-b flex items-center justify-between").Content(
+							Div().Content(
+								Div().Class("text-base font-semibold").Text("Users"),
+								Div().Class("text-sm text-gray-500").Text("A small sample of recent signups"),
+							),
+							Div().Class("flex items-center gap-2").Content(
+								A().Class("text-sm rounded-lg border px-3 py-2 hover:bg-gray-50").Href("#").Text("Export"),
+								A().Class("text-sm rounded-lg bg-blue-600 text-white px-3 py-2").Href("#").Text("Invite"),
+							),
+						),
+
+						Div().Class("overflow-hidden").Content(
+							Table().Class("w-full text-sm").Content(
+								Thead().Class("bg-gray-50 text-gray-600").Content(
+									Tr().Content(
+										Th().Class("text-left font-medium px-6 py-3").Text("Name"),
+										Th().Class("text-left font-medium px-6 py-3").Text("Email"),
+										Th().Class("text-left font-medium px-6 py-3").Text("Role"),
+										Th().Class("text-right font-medium px-6 py-3").Text("Status"),
+									),
+								),
+								Tbody().Class("divide-y").Content(
+									buildRows(rows),
+								),
+							),
+						),
+
+						Div().Class("px-6 py-4 border-t flex items-center justify-between").Content(
+							Div().Class("text-sm text-gray-500").Text("Showing 1 to 10 of 1,284 results"),
+							Div().Class("flex items-center gap-2").Content(
+								A().Class("rounded-lg border px-3 py-2 text-sm hover:bg-gray-50").Href("#").Text("Previous"),
+								A().Class("rounded-lg bg-gray-900 text-white px-3 py-2 text-sm").Href("#").Text("1"),
+								A().Class("rounded-lg border px-3 py-2 text-sm hover:bg-gray-50").Href("#").Text("2"),
+								A().Class("rounded-lg border px-3 py-2 text-sm hover:bg-gray-50").Href("#").Text("3"),
+								A().Class("rounded-lg border px-3 py-2 text-sm hover:bg-gray-50").Href("#").Text("Next"),
+							),
+						),
+					),
+				),
+			),
+
+			Footer().Class("mt-10 pb-10").Content(
+				Div().Class("mx-auto max-w-6xl px-6 text-sm text-gray-500").Text("(c) 2026 Acme Inc. All rights reserved."),
+			),
+		)
+}
+
+func buildRows(rows int) *Node {
+	out := Group()
+	for i := 0; i < rows; i++ {
+		out.Append(
+			Tr().Class("hover:bg-gray-50").Content(
+				Td().Class("px-6 py-3").Content(
+					Div().Class("font-medium").Text("Alice Johnson"),
+					Div().Class("text-xs text-gray-500").Text("Amsterdam"),
+				),
+				Td().Class("px-6 py-3").Text("alice@example.com"),
+				Td().Class("px-6 py-3").Text("Member"),
+				Td().Class("px-6 py-3 text-right").Content(
+					Span().Class("inline-flex items-center rounded-full bg-green-50 text-green-700 px-2 py-1 text-xs").Text("Active"),
+				),
+			),
+		)
+	}
+	return out
+}
+
+func Benchmark_Page_Build(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		n := buildBenchPage(100)
+		n.Release()
+	}
+}
+
+func Benchmark_Page_Render(b *testing.B) {
+	b.ReportAllocs()
+
+	n := buildBenchPage(100)
+	defer n.Release()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := n.Render(io.Discard); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func Benchmark_Page_BuildRender(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		n := buildBenchPage(100)
+		if err := n.Render(io.Discard); err != nil {
+			b.Fatal(err)
+		}
+		n.Release()
+	}
+}

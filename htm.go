@@ -709,7 +709,7 @@ func (n *Node) TextValue(v TypedValue) *Node {
 // Append adds nodes to the end of the content.
 func (n *Node) Append(nodes ...*Node) *Node {
 	for _, node := range nodes {
-		if node != nil {
+		if node != nil { // if at least one is non-nil - append all
 			n.content = append(n.content, nodes...)
 			return n
 		}
@@ -720,7 +720,7 @@ func (n *Node) Append(nodes ...*Node) *Node {
 // Prepend adds nodes to the beginning of the content.
 func (n *Node) Prepend(nodes ...*Node) *Node {
 	for _, node := range nodes {
-		if node != nil {
+		if node != nil { // if at least one is non-nil - append all
 			n.content = append(nodes, n.content...)
 			return n
 		}
@@ -1405,28 +1405,33 @@ func WriteFloat(w io.Writer, f float64) error {
 var NoPool bool
 
 var nodePool = sync.Pool{
-	New: func() any {
-		n := &Node{
-			tag:   "div",
-			attrs: newAttrMap(),
-			class: newClassMap(),
-		}
+	New: func() any { return newNode() },
+}
 
-		if NoPool {
-			return n
-		}
+func newNode() *Node {
+	n := &Node{
+		tag:   "div",
+		attrs: newAttrMap(),
+		class: newClassMap(),
+	}
 
-		n.content = make([]*Node, 0, 16)
-		n.slots = make([]slotNode, 0, 4)
-		n.vars = make([]valueEntry, 0, 4)
-
+	if NoPool {
 		return n
-	},
+	}
+
+	n.content = make([]*Node, 0, 16)
+	n.slots = make([]slotNode, 0, 4)
+	n.vars = make([]valueEntry, 0, 4)
+
+	return n
 }
 
 // Get retrieves a zeroed Node from the global pool.
 // Most users should use Build, Group, Text and others instead.
 func Get() *Node {
+	if NoPool {
+		return newNode()
+	}
 	n := nodePool.Get().(*Node)
 
 	if !n.acquired.CompareAndSwap(false, true) {
@@ -1435,6 +1440,14 @@ func Get() *Node {
 
 	return n
 }
+
+// var (
+// 	contentSliceThrown     atomic.Uint64
+// 	slotContentSliceThrown atomic.Uint64
+// 	slotSliceThrown        atomic.Uint64
+// 	varSliceThrown         atomic.Uint64
+// 	attachedSliceThrown    atomic.Uint64
+// )
 
 func put(n *Node) {
 	if n == nil {
@@ -1460,7 +1473,7 @@ func put(n *Node) {
 	n.writeFn = nil
 
 	if n.content == nil {
-		n.content = make([]*Node, 0, 16)
+		// n.content = make([]*Node, 0, 16)
 
 	} else if len(n.content) > 0 {
 		for _, node := range n.content {
@@ -1468,9 +1481,10 @@ func put(n *Node) {
 		}
 		clear(n.content)
 		n.content = n.content[:0]
-		if cap(n.content) > 128 {
-			n.content = make([]*Node, 0, 64)
-		}
+		// if cap(n.content) > 128 {
+		// 	contentSliceThrown.Add(1)
+		// 	n.content = make([]*Node, 0, 64)
+		// }
 	}
 
 	if len(n.slots) > 0 {
@@ -1480,23 +1494,25 @@ func put(n *Node) {
 			}
 			clear(slot.content)
 			slot.content = slot.content[:0]
-
-			if cap(slot.content) > 128 {
-				slot.content = make([]*Node, 0, 64)
-			}
+			// if cap(slot.content) > 128 {
+			// 	slotContentSliceThrown.Add(1)
+			// 	slot.content = make([]*Node, 0, 64)
+			// }
 		}
 		n.slots = n.slots[:0]
-		if cap(n.slots) > 16 {
-			n.slots = make([]slotNode, 0, 8)
-		}
+		// if cap(n.slots) > 16 {
+		// 	slotSliceThrown.Add(1)
+		// 	n.slots = make([]slotNode, 0, 8)
+		// }
 	}
 
 	if len(n.vars) > 0 {
 		clear(n.vars)
 		n.vars = n.vars[:0]
-		if cap(n.vars) > 32 {
-			n.vars = make([]valueEntry, 0, 16)
-		}
+		// if cap(n.vars) > 32 {
+		// 	varSliceThrown.Add(1)
+		// 	n.vars = make([]valueEntry, 0, 16)
+		// }
 	}
 
 	if len(n.attached) > 0 {
@@ -1505,9 +1521,10 @@ func put(n *Node) {
 		}
 		clear(n.attached)
 		n.attached = n.attached[:0]
-		if cap(n.attached) > 64 {
-			n.attached = make([]*Node, 0, 32)
-		}
+		// if cap(n.attached) > 64 {
+		// 	attachedSliceThrown.Add(1)
+		// 	n.attached = make([]*Node, 0, 32)
+		// }
 	}
 
 	if len(n.postponed) > 0 {
@@ -1900,8 +1917,9 @@ func Uint(v uint) TypedValue     { return Uint64(uint64(v)) }
 func Int64(v int64) TypedValue   { return TypedValue{num: uint64(v), any: KindInt64} }
 func Uint64(v uint64) TypedValue { return TypedValue{num: v, any: KindUint64} }
 func Float(v float64) TypedValue { return TypedValue{num: math.Float64bits(v), any: KindFloat64} }
-func Any(v any) TypedValue       { return TypedValue{any: v, num: uint64(KindAny)} }  // inverse
-func JSON(v any) TypedValue      { return TypedValue{any: v, num: uint64(KindJSON)} } // inverse
+
+func Any(v any) TypedValue  { return TypedValue{any: v, num: uint64(KindAny)} }  // inverse
+func JSON(v any) TypedValue { return TypedValue{any: v, num: uint64(KindJSON)} } // inverse
 
 func (v TypedValue) String() (string, bool) {
 	if sp, ok := v.any.(stringptr); ok {
