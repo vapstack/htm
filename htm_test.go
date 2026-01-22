@@ -258,16 +258,20 @@ func Benchmark_Build(b *testing.B) {
 	b.ResetTimer()
 
 	fn := func() {
-		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-			Span().Class("a b c").Text("hello"),
-			Span().Attr("data-x", "1").Text("world"),
-		)
+		n := buildBasic()
 		defer n.Release()
 	}
 
 	for i := 0; i < b.N; i++ {
 		fn()
 	}
+}
+
+func buildBasic() *Node {
+	return Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
+		Span().Class("a b c").Text("hello"),
+		Span().Attr("data-x", "1").Text("world"),
+	)
 }
 
 func Benchmark_Build_Mods(b *testing.B) {
@@ -277,11 +281,9 @@ func Benchmark_Build_Mods(b *testing.B) {
 
 	fn := func() {
 		n := Div(
-			Class("flex flex-col items-center p-7 rounded-2xl"),
-			Attr("id", "root"),
-			Content(
-				Span(Class("a b c"), Content(Text("hello"))),
-				Span(Attr("data-x", "1"), Content(Text("world"))),
+			Class("flex flex-col items-center p-7 rounded-2xl"), Attr("id", "root"), Content(
+				Span(Class("a b c"), TextContent("hello")),
+				Span(Attr("data-x", "1"), TextContent("world")),
 			),
 		)
 		defer n.Release()
@@ -293,10 +295,7 @@ func Benchmark_Build_Mods(b *testing.B) {
 }
 
 func Benchmark_Render(b *testing.B) {
-	n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
-		Span().Class("a b c").Text("hello"),
-		Span().Attr("data-x", "1").Text("world"),
-	)
+	n := buildBasic()
 	defer n.Release()
 
 	var buf bytes.Buffer
@@ -397,7 +396,6 @@ func Benchmark_Class_SetMulti(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		// mimic typical build usage
 		n.class.reset()
 		n.Class(s1)
 		n.Class(s2)
@@ -405,11 +403,25 @@ func Benchmark_Class_SetMulti(b *testing.B) {
 	}
 }
 
-func Benchmark_Attrs_SetAndMovePrefix(b *testing.B) {
+func Benchmark_Class_SetAndMoveClassPrefix(b *testing.B) {
 	src := Build("div")
 	dst := Build("div")
-	defer src.Release()
-	defer dst.Release()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		src.class.reset()
+		dst.class.reset()
+
+		src.Class("abc1 xyz1 abc2 xyz2 xyz3 abc3")
+		src.MoveClassPrefixTo(dst, "abc")
+	}
+}
+
+func Benchmark_Attrs_SetAndMoveAttrPrefix(b *testing.B) {
+	src := Build("div")
+	dst := Build("div")
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -425,7 +437,6 @@ func Benchmark_Attrs_SetAndMovePrefix(b *testing.B) {
 
 /**/
 
-// Typical list item model
 type Item struct {
 	ID    int
 	Name  string
@@ -482,6 +493,27 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 	}
 }
 
+func Benchmark_Compare_Htm_Static(b *testing.B) {
+	static := Static(func() *Node {
+		x := Ul().Class("user-list")
+		for _, item := range benchData {
+			x.Append(
+				Li().Class("user-item").AttrValue("id", Int(item.ID)).Content(
+					Span().Class("name").Text(item.Name),
+					A().Href("mailto:"+item.Email).Text(item.Email), // strings concatenation will allocate
+				),
+			)
+		}
+		return x
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = static.Render(io.Discard)
+	}
+}
+
 // standard html/template
 
 func Benchmark_Compare_StdTemplate(b *testing.B) {
@@ -499,9 +531,9 @@ func Benchmark_Compare_StdTemplate(b *testing.B) {
 // the "baseline" speed, unsafe but fast
 
 func Benchmark_Compare_RawString(b *testing.B) {
-	b.ReportAllocs()
-	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	buf := bytes.NewBuffer(make([]byte, 0, 64*1024))
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -519,9 +551,7 @@ func Benchmark_Compare_RawString(b *testing.B) {
 			buf.WriteString(item.Email)
 			buf.WriteString(`</a></li>`)
 		}
-
 		buf.WriteString(`</ul>`)
-		_, _ = buf.WriteTo(io.Discard)
 	}
 }
 
@@ -559,9 +589,7 @@ func buildBenchPage(rows int) *Node {
 					),
 				),
 
-				// Main
 				Main().Class("col-span-9 space-y-6").Content(
-					// Summary cards
 					Div().Class("grid grid-cols-3 gap-4").Content(
 						Div().Class("rounded-2xl bg-white border p-5").Content(
 							Div().Class("text-sm text-gray-500").Text("Active users"),
@@ -580,7 +608,6 @@ func buildBenchPage(rows int) *Node {
 						),
 					),
 
-					// Table card
 					Section().Class("rounded-2xl bg-white border").Content(
 						Div().Class("px-6 py-4 border-b flex items-center justify-between").Content(
 							Div().Content(

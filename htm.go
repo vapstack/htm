@@ -412,13 +412,21 @@ func (n *Node) MoveClassTo(dst *Node, names ...string) *Node {
 
 // CopyClassPrefixTo copies classes starting with the given prefixes to the destination node.
 func (n *Node) CopyClassPrefixTo(dst *Node, prefixes ...string) *Node {
-	for _, e := range n.class.o {
-		if e.active {
-			for _, prefix := range prefixes {
-				if e.active && strings.HasPrefix(e.name, prefix) {
-					dst.class.setOne(e.name, true)
-					break
-				}
+OUTER:
+	for i := len(n.class.o) - 1; i >= 0; i-- {
+		e := n.class.o[i]
+		if !e.active {
+			continue
+		}
+		for k := i + 1; k < len(n.class.o); k++ {
+			if n.class.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(e.name, prefix) {
+				dst.class.setOne(e.name, true)
+				break
 			}
 		}
 	}
@@ -427,14 +435,22 @@ func (n *Node) CopyClassPrefixTo(dst *Node, prefixes ...string) *Node {
 
 // MoveClassPrefixTo moves classes starting with the given prefixes to the destination node.
 func (n *Node) MoveClassPrefixTo(dst *Node, prefixes ...string) *Node {
-	for i, e := range n.class.o {
-		if e.active {
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(e.name, prefix) {
-					dst.class.setOne(e.name, true)
-					n.class.o[i].active = false
-					break
-				}
+OUTER:
+	for i := len(n.class.o) - 1; i >= 0; i-- {
+		e := n.class.o[i]
+		if !e.active {
+			continue
+		}
+		for k := i + 1; k < len(n.class.o); k++ {
+			if n.class.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(e.name, prefix) {
+				dst.class.setOne(e.name, true)
+				n.class.o[i].active = false
+				break
 			}
 		}
 	}
@@ -443,13 +459,21 @@ func (n *Node) MoveClassPrefixTo(dst *Node, prefixes ...string) *Node {
 
 // CopyClassSuffixTo copies classes ending with the given suffixes to the destination node.
 func (n *Node) CopyClassSuffixTo(dst *Node, suffixes ...string) *Node {
-	for _, e := range n.class.o {
-		if e.active {
-			for _, suffix := range suffixes {
-				if strings.HasSuffix(e.name, suffix) {
-					dst.class.setOne(e.name, true)
-					break
-				}
+OUTER:
+	for i := len(n.class.o) - 1; i >= 0; i-- {
+		e := n.class.o[i]
+		if !e.active {
+			continue
+		}
+		for k := i + 1; k < len(n.class.o); k++ {
+			if n.class.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(e.name, suffix) {
+				dst.class.setOne(e.name, true)
+				break
 			}
 		}
 	}
@@ -458,14 +482,22 @@ func (n *Node) CopyClassSuffixTo(dst *Node, suffixes ...string) *Node {
 
 // MoveClassSuffixTo moves classes ending with the given suffixes to the destination node.
 func (n *Node) MoveClassSuffixTo(dst *Node, suffixes ...string) *Node {
-	for i, e := range n.class.o {
-		if e.active {
-			for _, suffix := range suffixes {
-				if strings.HasSuffix(e.name, suffix) {
-					dst.class.setOne(e.name, true)
-					n.class.o[i].active = false
-					break
-				}
+OUTER:
+	for i := len(n.class.o) - 1; i >= 0; i-- {
+		e := n.class.o[i]
+		if !e.active {
+			continue
+		}
+		for k := i + 1; k < len(n.class.o); k++ {
+			if n.class.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(e.name, suffix) {
+				dst.class.setOne(e.name, true)
+				n.class.o[i].active = false
+				break
 			}
 		}
 	}
@@ -1169,10 +1201,18 @@ func writeClass(w io.Writer, classes []classEntry) error {
 	if _, err := w.Write(classPrefix); err != nil {
 		return err
 	}
+
 	first := true
-	for _, c := range classes {
+OUTER:
+	for i := 0; i < len(classes); i++ {
+		c := classes[i]
 		if !c.active || !ValidClass(c.name) {
 			continue
+		}
+		for k := i + 1; k < len(classes); k++ {
+			if classes[k].name == c.name {
+				continue OUTER
+			}
 		}
 		if !first {
 			if _, err := w.Write(space); err != nil {
@@ -1184,6 +1224,7 @@ func writeClass(w io.Writer, classes []classEntry) error {
 		}
 		first = false
 	}
+
 	if _, err := w.Write(quote); err != nil {
 		return err
 	}
@@ -1191,14 +1232,20 @@ func writeClass(w io.Writer, classes []classEntry) error {
 }
 
 func writeAttributes(w io.Writer, attrs []valueEntry) error {
-	for _, a := range attrs {
+OUTER:
+	for i := 0; i < len(attrs); i++ {
+		a := attrs[i]
 		if !a.value.Valid() {
 			continue
 		}
 		if !ValidAttr(a.name) {
 			continue
 		}
-
+		for k := i + 1; k < len(attrs); k++ {
+			if attrs[k].name == a.name {
+				continue OUTER
+			}
+		}
 		kind := a.value.Kind()
 
 		if kind == KindBool && a.value.num == 0 {
@@ -1263,7 +1310,6 @@ func writeAttributes(w io.Writer, attrs []valueEntry) error {
 			if err != nil {
 				return err
 			}
-
 		default:
 			if _, err := fmt.Fprint(EscapeWriter(w.Write), a.value.any); err != nil {
 				return err
@@ -1453,10 +1499,10 @@ func put(n *Node) {
 	if n == nil {
 		return
 	}
-	if n.flag&flagOwned != 0 {
+	if NoPool {
 		return
 	}
-	if NoPool {
+	if n.flag&flagOwned != 0 {
 		return
 	}
 	if !n.acquired.CompareAndSwap(true, false) {
@@ -1472,10 +1518,10 @@ func put(n *Node) {
 
 	n.writeFn = nil
 
-	if n.content == nil {
-		// n.content = make([]*Node, 0, 16)
-
-	} else if len(n.content) > 0 {
+	// if n.content == nil {
+	// 	// n.content = make([]*Node, 0, 16)
+	// } else
+	if len(n.content) > 0 {
 		for _, node := range n.content {
 			put(node)
 		}
@@ -1555,17 +1601,20 @@ func (am *attrMap) reset() {
 }
 
 func (am *attrMap) get(name string) (TypedValue, bool) {
-	for i := range am.o {
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
 		if e.name == name {
-			return e.value, true
+			if e.value.Valid() {
+				return e.value, true
+			}
+			return Unset, false
 		}
 	}
-	return TypedValue{}, false
+	return Unset, false
 }
 
 func (am *attrMap) findActiveIndex(name string) int {
-	for i := range am.o {
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
 		if e.name == name {
 			if e.value.Valid() {
@@ -1579,8 +1628,13 @@ func (am *attrMap) findActiveIndex(name string) int {
 
 func (am *attrMap) hasAny(names ...string) bool {
 	for _, name := range names {
-		if am.findActiveIndex(name) >= 0 {
-			return true
+		for i := len(am.o) - 1; i >= 0; i-- {
+			if am.o[i].name == name {
+				if am.o[i].value.Valid() {
+					return true
+				}
+				break
+			}
 		}
 	}
 	return false
@@ -1588,7 +1642,14 @@ func (am *attrMap) hasAny(names ...string) bool {
 
 func (am *attrMap) hasAll(names ...string) bool {
 	for _, name := range names {
-		if am.findActiveIndex(name) < 0 {
+		ok := false
+		for i := len(am.o) - 1; i >= 0; i-- {
+			if am.o[i].name == name {
+				ok = am.o[i].value.Valid()
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
 	}
@@ -1596,32 +1657,59 @@ func (am *attrMap) hasAll(names ...string) bool {
 }
 
 func (am *attrMap) hasPrefix(prefix string) bool {
-	for i := range am.o {
+OUTER:
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
-		if e.value.Valid() && strings.HasPrefix(e.name, prefix) {
-			return true
+		if !e.value.Valid() {
+			continue
 		}
+		if !strings.HasPrefix(e.name, prefix) {
+			continue
+		}
+		for k := i + 1; k < len(am.o); k++ {
+			if am.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		return true
 	}
 	return false
 }
 
 func (am *attrMap) hasSuffix(suffix string) bool {
-	for i := range am.o {
+OUTER:
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
-		if e.value.Valid() && strings.HasSuffix(e.name, suffix) {
-			return true
+		if !e.value.Valid() {
+			continue
 		}
+		if !strings.HasSuffix(e.name, suffix) {
+			continue
+		}
+		for k := i + 1; k < len(am.o); k++ {
+			if am.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		return true
 	}
 	return false
 }
 
 func (am *attrMap) each(fn func(string, TypedValue) bool) {
-	for i := range am.o {
+OUTER:
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
-		if e.value.Valid() {
-			if !fn(e.name, e.value) {
-				return
+		if !e.value.Valid() {
+			continue
+		}
+		for k := i + 1; k < len(am.o); k++ {
+			if am.o[k].name == e.name {
+				continue OUTER
 			}
+		}
+		if !fn(e.name, e.value) {
+			return
 		}
 	}
 }
@@ -1630,25 +1718,15 @@ func (am *attrMap) set(name string, v TypedValue) {
 	if name == "" {
 		return
 	}
-	for i := range am.o {
-		if am.o[i].name == name {
-			am.o[i].value = v
-			return
-		}
-	}
-	if !v.Valid() {
-		return
-	}
 	am.o = append(am.o, valueEntry{name: name, value: v})
 }
 
 func (am *attrMap) extract(name string) (TypedValue, bool) {
-	for i := range am.o {
-		e := am.o[i]
-		if e.name != name {
+	for i := len(am.o) - 1; i >= 0; i-- {
+		if am.o[i].name != name {
 			continue
 		}
-		v := e.value
+		v := am.o[i].value
 		if !v.Valid() {
 			return Unset, false
 		}
@@ -1659,30 +1737,44 @@ func (am *attrMap) extract(name string) (TypedValue, bool) {
 }
 
 func (am *attrMap) movePrefixTo(dst *attrMap, prefix string) {
-	for i := range am.o {
+OUTER:
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
 		v := e.value
 		if !v.Valid() {
 			continue
 		}
-		if strings.HasPrefix(e.name, prefix) {
-			dst.set(e.name, v)
-			am.o[i].value = Unset
+		if !strings.HasPrefix(e.name, prefix) {
+			continue
 		}
+		for k := i + 1; k < len(am.o); k++ {
+			if am.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		dst.set(e.name, v)
+		am.o[i].value = Unset
 	}
 }
 
 func (am *attrMap) moveSuffixTo(dst *attrMap, suffix string) {
-	for i := range am.o {
+OUTER:
+	for i := len(am.o) - 1; i >= 0; i-- {
 		e := am.o[i]
 		v := e.value
 		if !v.Valid() {
 			continue
 		}
-		if strings.HasSuffix(e.name, suffix) {
-			dst.set(e.name, v)
-			am.o[i].value = Unset
+		if !strings.HasSuffix(e.name, suffix) {
+			continue
 		}
+		for k := i + 1; k < len(am.o); k++ {
+			if am.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		dst.set(e.name, v)
+		am.o[i].value = Unset
 	}
 }
 
@@ -1691,7 +1783,7 @@ func (am *attrMap) moveSuffixTo(dst *attrMap, suffix string) {
 type (
 	classMap struct {
 		o []classEntry
-		m map[string]int
+		// m map[string]int
 	}
 	classEntry struct {
 		name   string
@@ -1702,34 +1794,42 @@ type (
 func newClassMap() *classMap {
 	return &classMap{
 		o: make([]classEntry, 0, 16),
-		m: make(map[string]int, 16),
 	}
 }
 
 func (cm *classMap) reset() {
 	cm.o = cm.o[:0]
-	clear(cm.m)
 }
 
 func (cm *classMap) has(name string) bool {
-	if idx, ok := cm.m[name]; ok {
-		return cm.o[idx].active
+	for i := len(cm.o) - 1; i >= 0; i-- {
+		if cm.o[i].name == name {
+			return cm.o[i].active
+		}
 	}
 	return false
 }
 
 func (cm *classMap) extract(name string) bool {
-	if idx, ok := cm.m[name]; ok && cm.o[idx].active {
-		cm.o[idx].active = false
-		return true
+	for i := len(cm.o) - 1; i >= 0; i-- {
+		if cm.o[i].name == name {
+			out := cm.o[i].active
+			cm.o[i].active = false
+			return out
+		}
 	}
 	return false
 }
 
 func (cm *classMap) hasAny(names ...string) bool {
 	for _, name := range names {
-		if idx, ok := cm.m[name]; ok && cm.o[idx].active {
-			return true
+		for i := len(cm.o) - 1; i >= 0; i-- {
+			if cm.o[i].name == name {
+				if cm.o[i].active {
+					return true
+				}
+				break
+			}
 		}
 	}
 	return false
@@ -1737,7 +1837,14 @@ func (cm *classMap) hasAny(names ...string) bool {
 
 func (cm *classMap) hasAll(names ...string) bool {
 	for _, name := range names {
-		if idx, ok := cm.m[name]; !ok || !cm.o[idx].active {
+		ok := false
+		for i := len(cm.o) - 1; i >= 0; i-- {
+			if cm.o[i].name == name {
+				ok = cm.o[i].active
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
 	}
@@ -1745,9 +1852,21 @@ func (cm *classMap) hasAll(names ...string) bool {
 }
 
 func (cm *classMap) hasPrefix(prefix string) bool {
-	for i := range cm.o {
+OUTER:
+	for i := len(cm.o) - 1; i >= 0; i-- {
 		e := cm.o[i]
-		if e.active && strings.HasPrefix(e.name, prefix) {
+		if !e.active {
+			continue
+		}
+		if !strings.HasPrefix(e.name, prefix) {
+			continue
+		}
+		for k := i + 1; k < len(cm.o); k++ {
+			if cm.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		if e.active {
 			return true
 		}
 	}
@@ -1755,22 +1874,39 @@ func (cm *classMap) hasPrefix(prefix string) bool {
 }
 
 func (cm *classMap) hasSuffix(suffix string) bool {
-	for i := range cm.o {
+OUTER:
+	for i := len(cm.o) - 1; i >= 0; i-- {
 		e := cm.o[i]
-		if e.active && strings.HasSuffix(e.name, suffix) {
-			return true
+		if !e.active {
+			continue
 		}
+		if !strings.HasSuffix(e.name, suffix) {
+			continue
+		}
+		for k := i + 1; k < len(cm.o); k++ {
+			if cm.o[k].name == e.name {
+				continue OUTER
+			}
+		}
+		return true
 	}
 	return false
 }
 
 func (cm *classMap) each(fn func(string) bool) {
-	for i := range cm.o {
+OUTER:
+	for i := len(cm.o) - 1; i >= 0; i-- {
 		e := cm.o[i]
-		if e.active {
-			if !fn(e.name) {
-				return
+		if !e.active {
+			continue
+		}
+		for k := i + 1; k < len(cm.o); k++ {
+			if cm.o[k].name == e.name {
+				continue OUTER
 			}
+		}
+		if !fn(e.name) {
+			return
 		}
 	}
 }
@@ -1783,26 +1919,26 @@ func (cm *classMap) setMulti(s string, active bool) {
 				start = i
 			}
 		} else if start != -1 {
-			cm.setOne(s[start:i], active)
+			cm.o = append(cm.o, classEntry{
+				name:   s[start:i],
+				active: active,
+			})
 			start = -1
 		}
 	}
 	if start != -1 {
-		cm.setOne(s[start:], active)
+		cm.o = append(cm.o, classEntry{
+			name:   s[start:],
+			active: active,
+		})
 	}
 }
 
 func (cm *classMap) setOne(name string, active bool) {
-	if idx, ok := cm.m[name]; ok {
-		cm.o[idx].active = active
-		return
-	}
-	if !active {
-		return
-	}
-	idx := len(cm.o)
-	cm.o = append(cm.o, classEntry{name: name, active: true})
-	cm.m[name] = idx
+	cm.o = append(cm.o, classEntry{
+		name:   name,
+		active: active,
+	})
 }
 
 /**/

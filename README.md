@@ -7,8 +7,8 @@
 
 A relatively fast, zero-allocation HTML tree builder and renderer for Go.
 
-It provides an allocation-conscious `Node` type with a fluent method API and an optional functional API
-that makes it easy to compose reusable building blocks. While fully capable of direct use, 
+It provides a `Node` type with a fluent method API (chaining) and an optional functional API
+that simplifies composition of reusable building blocks. While fully capable of direct use, 
 its primary design goal is to serve as a foundation for higher-level DSLs and component frameworks. 
 
 ### Goals
@@ -21,7 +21,7 @@ its primary design goal is to serve as a foundation for higher-level DSLs and co
 Non-goals:
 
 - Being a complete web framework.
-- Hiding all footguns. This package prioritizes performance and control.
+- Hiding all footguns.
 
 ## Quick start
 
@@ -51,7 +51,8 @@ _ = root.Render(os.Stdout)
 
 Mods (or modifiers) are functions with the signature `func(*Node)`.
 This is primarily about extensibility and composition.
-It allows to define custom logic, reusable attribute groups, or higher-level abstractions in separate packages.
+It allows to define custom logic, reusable attribute groups, 
+or higher-level abstractions in separate packages.
 
 ```go
 root := htm.Div(
@@ -89,6 +90,14 @@ func Button(mods ...htm.Mod) *htm.Node {
 func Primary() htm.Mod {
     return htm.Class("btn-primary")
 }
+
+func SetFoo(v string) htm.Mod {
+    return func(n *htm.Node) {
+        n.Attr("foo", htm.String(v))
+    }
+}
+
+// etc.
 ```
 
 Usage:
@@ -104,6 +113,9 @@ btn := ui.Button(ui.Primary(), htm.TextContent("Save"))
 btn := ui.Button(ui.Primary()).Text("Save")
 // or
 btn := ui.Button().Text("Save").Mod(ui.Primary())
+// or
+btn := ui.Button(SetFoo("bar")).Text("Save").Mod(ui.Primary())
+// etc.
 ```
 
 This gives "components" that can be combined into higher level building blocks.
@@ -212,7 +224,7 @@ htm.Var("name", "value")
 htm.Text("hello")
 ```
 
-For other values, `*Value` variants are available:
+For other values, variants are available:
 ```go
 n.AttrValue("name", htm.Int(-42))
 n.AttrValue("name", htm.Uint(100))
@@ -233,6 +245,8 @@ Please refer to the [documentation](https://godoc.org/github.com/vapstack/htm) f
 
 - Text nodes and attribute values are HTML-escaped by default.
 - Raw nodes write bytes directly without escaping.
+
+
 - JavaScript and CSS can be rendered as raw bytes; no sanitization is currently performed.
 
 ## Sub-packages
@@ -272,7 +286,7 @@ Automatic pooling can be completely disabled by setting `NoPool`.
 
 Package optimizes for runtime performance rather than memory efficiency.
 Some internal structures trade memory for speed or simplicity
-(e.g. keeping order-preserving attribute storage, class maps, etc.).
+(e.g. keeping order-preserving attribute storage).
 If you need the smallest possible memory footprint,
 you may want to benchmark and/or consider alternative approaches.
 
@@ -289,17 +303,23 @@ There are several benchmarks in the test file,
 but for a realistic assessment, it is better to build and test your own trees.
 
 ```go
-htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").
-    Content(
-        htm.Span().Class("a b c").Text("hello"),
-        htm.Span().Attr("data-x", "1").Text("world"),
-    )
+htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "test").Content(
+    htm.Span().Class("a b c").Text("hello"),
+    htm.Span().Attr("data-x", "1").Text("world"),
+)
 ```
 Building and rendering the tree above on a laptop with Ryzen 9 5900HX takes:
 ```
-Benchmark_Build-16          2057107     574.3 ns/op     0 B/op     0 allocs/op
-Benchmark_Render-16         2459556     486.4 ns/op     0 B/op     0 allocs/op
-Benchmark_BuildRender-16     959235    1133 ns/op       0 B/op     0 allocs/op
+Benchmark_Build-16              4325557     276.3 ns/op     0 B/op     0 allocs/op
+Benchmark_Render-16             2266953     528.6 ns/op     0 B/op     0 allocs/op
+Benchmark_BuildRender-16        1405723     851.6 ns/op     0 B/op     0 allocs/op
+```
+
+A page with header, footer and a table with 100 rows:
+```
+Benchmark_Page_Build-16            8739  114445 ns/op     230 B/op     0 allocs/op
+Benchmark_Page_Render-16           9691  133146 ns/op       3 B/op     0 allocs/op
+Benchmark_Page_BuildRender-16      5023  252532 ns/op     100 B/op     0 allocs/op
 ```
 
 ## Contribution
