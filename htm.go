@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +42,10 @@ type Node struct {
 }
 
 type slotNode struct {
-	name    string
-	content []*Node
+	name  string
+	group *Node
+
+	// content []*Node
 }
 
 type valueEntry struct {
@@ -121,7 +124,7 @@ func Mods(mods ...Mod) Mod {
 	return nil
 }
 
-// If conditionally builds and returns a node by calling fn when cond is true.
+// If conditionally returns a node produced by fn when cond is true.
 // If cond is false, If returns nil.
 func If(cond bool, fn func() *Node) *Node {
 	if cond {
@@ -159,6 +162,16 @@ func (n *Node) If(cond bool, fn func(*Node)) *Node {
 	if cond {
 		fn(n)
 	}
+	return n
+}
+
+// DefaultContent postpones a function that executes fn if the node's content is empty.
+func (n *Node) DefaultContent(fn func(*Node)) *Node {
+	n.postponed = append(n.postponed, func(n *Node) {
+		if n.NoContent() {
+			fn(n)
+		}
+	})
 	return n
 }
 
@@ -753,7 +766,7 @@ func (n *Node) Append(nodes ...*Node) *Node {
 func (n *Node) Prepend(nodes ...*Node) *Node {
 	for _, node := range nodes {
 		if node != nil { // if at least one is non-nil - append all
-			n.content = append(nodes, n.content...)
+			n.content = slices.Insert(n.content, 0, nodes...)
 			return n
 		}
 	}
@@ -770,6 +783,16 @@ func (n *Node) HasContent() bool {
 	return false
 }
 
+// NoContent checks if the node has no content.
+func (n *Node) NoContent() bool {
+	for _, v := range n.content {
+		if v != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // RemoveContent clears the content and recursively releases all child nodes.
 func (n *Node) RemoveContent() *Node {
 	for _, c := range n.content {
@@ -780,10 +803,21 @@ func (n *Node) RemoveContent() *Node {
 	return n
 }
 
-// ExtractContent removes and returns the content of the node.
-func (n *Node) ExtractContent() (extracted []*Node) {
+// ExtractContentNodes removes and returns the content of the node.
+func (n *Node) ExtractContentNodes() (extracted []*Node) {
 	extracted, n.content = n.content, nil
 	return
+}
+
+// ExtractContent removes and returns the content of the node as Group node.
+func (n *Node) ExtractContent() *Node {
+	if len(n.content) > 0 {
+		g := Group(n.content...)
+		clear(n.content)
+		n.content = n.content[:0]
+		return g
+	}
+	return nil
 }
 
 // MoveContentTo moves all content from the current node to the destination node.
@@ -803,9 +837,9 @@ func (n *Node) EachContent(fn func(*Node) bool) *Node {
 	return n
 }
 
-// MoveContent returns a Mod that moves the content to a destination node.
-func (n *Node) MoveContent() Mod {
-	return func(dst *Node) { n.MoveContentTo(dst) }
+// MoveContent is a Mod that moves the content to a destination node.
+func (n *Node) MoveContent(dst *Node) {
+	n.MoveContentTo(dst)
 }
 
 /**/
@@ -814,7 +848,7 @@ func (n *Node) MoveContent() Mod {
 func (n *Node) HasSlot(name string) bool {
 	for _, slot := range n.slots {
 		if slot.name == name {
-			return len(slot.content) > 0
+			return slot.group != nil
 		}
 	}
 	return false
@@ -828,28 +862,9 @@ func Slot(name string, nodes ...*Node) Mod {
 
 // Slot sets the content of a named slot. If the slot exists, its content is replaced.
 func (n *Node) Slot(name string, nodes ...*Node) *Node {
-	for i, slot := range n.slots {
-		if slot.name == name {
-			if len(slot.content) > 0 {
-				for _, node := range slot.content {
-					put(node)
-				}
-				clear(slot.content)
-				n.slots[i].content = slot.content[:0]
-			}
-			for _, node := range nodes {
-				if node != nil {
-					n.slots[i].content = append(slot.content, nodes...)
-					return n
-				}
-			}
-			return n
-		}
-	}
 	for _, node := range nodes {
-		if node != nil {
-			n.slots = append(n.slots, slotNode{name: name, content: nodes})
-			return n
+		if node != nil { // if at least one is not nil - add all
+			return n.addSlot(name, slotReplace, nodes...)
 		}
 	}
 	return n
@@ -858,17 +873,9 @@ func (n *Node) Slot(name string, nodes ...*Node) *Node {
 // AppendSlot adds nodes to the end of a named slot.
 func (n *Node) AppendSlot(name string, nodes ...*Node) *Node {
 	for _, node := range nodes {
-		if node == nil {
-			continue
+		if node != nil { // if at least one is not nil - add all
+			return n.addSlot(name, slotAppend, nodes...)
 		}
-		for i := range n.slots {
-			if n.slots[i].name == name {
-				n.slots[i].content = append(n.slots[i].content, nodes...)
-				return n
-			}
-		}
-		n.slots = append(n.slots, slotNode{name: name, content: nodes})
-		return n
 	}
 	return n
 }
@@ -876,18 +883,42 @@ func (n *Node) AppendSlot(name string, nodes ...*Node) *Node {
 // PrependSlot adds nodes to the beginning of a named slot.
 func (n *Node) PrependSlot(name string, nodes ...*Node) *Node {
 	for _, node := range nodes {
-		if node == nil {
+		if node != nil { // if at least one is not nil - add all
+			return n.addSlot(name, slotPrepend, nodes...)
+		}
+	}
+	return n
+}
+
+const (
+	slotReplace = iota
+	slotAppend
+	slotPrepend
+)
+
+func (n *Node) addSlot(name string, op byte, nodes ...*Node) *Node {
+	for i, slot := range n.slots {
+		if slot.name != name {
 			continue
 		}
-		for i := range n.slots {
-			if n.slots[i].name == name {
-				n.slots[i].content = append(nodes, n.slots[i].content...)
-				return n
+		if slot.group != nil {
+			switch op {
+			case slotReplace:
+				slot.group.Content(nodes...)
+			case slotAppend:
+				slot.group.Append(nodes...)
+			case slotPrepend:
+				slot.group.Prepend(nodes...)
 			}
+		} else {
+			n.slots[i].group = Group(nodes...)
 		}
-		n.slots = append(n.slots, slotNode{name: name, content: nodes})
 		return n
 	}
+	n.slots = append(n.slots, slotNode{
+		name:  name,
+		group: Group(nodes...),
+	})
 	return n
 }
 
@@ -898,75 +929,120 @@ func (n *Node) DeleteSlot(names ...string) *Node {
 			if n.slots[i].name != name {
 				continue
 			}
-			if len(n.slots[i].content) > 0 {
-				for _, node := range n.slots[i].content {
-					put(node)
-				}
-				clear(n.slots[i].content)
-				n.slots[i].content = n.slots[i].content[:0]
-			}
+			g := n.slots[i].group
+			g.Release()
+			n.slots[i].group = nil
 			break
 		}
 	}
 	return n
 }
 
-// ExtractSlot removes and returns the content of a named slot.
-func (n *Node) ExtractSlot(name string) (extracted []*Node) {
-	for i := range n.slots {
-		if n.slots[i].name != name {
+// ExtractSlotNodes removes and returns the content of a named slot.
+func (n *Node) ExtractSlotNodes(name string) []*Node {
+	for i, slot := range n.slots {
+		if slot.name != name {
 			continue
 		}
-		extracted = n.slots[i].content
-		n.slots[i].content = nil
+		if slot.group == nil {
+			return nil
+		}
+		g := slot.group
+		extracted := g.ExtractContentNodes()
+		g.Release()
+		n.slots[i].group = nil
 		return extracted
 	}
 	return nil
 }
 
-// MoveSlotTo moves named slots and their content to the destination node.
-func (n *Node) MoveSlotTo(dst *Node, names ...string) *Node {
-NAMES:
-	for _, name := range names {
-		si := -1
-		for i := range n.slots {
-			if n.slots[i].name == name {
-				si = i
-				break
-			}
+// Count returns a number of content nodes including nil nodes.
+// For exact number of non-nil nodes use CountExact.
+func (n *Node) Count() int {
+	return len(n.content)
+}
+
+// CountExact returns a number of non-nil content nodes.
+func (n *Node) CountExact() int {
+	count := 0
+	for _, x := range n.content {
+		if x != nil {
+			count++
 		}
-		if si < 0 {
+	}
+	return count
+}
+
+// CountRecursive returns a total number of content nodes
+// in the node itself and its subtree.
+// CountRecursive counts all nodes including nil ones.
+// For exact number of non-nil nodes use CountRecursiveExact.
+func (n *Node) CountRecursive() int {
+	count := n.Count()
+	for _, x := range n.content {
+		count += x.CountRecursive()
+	}
+	return count
+}
+
+// CountExactRecursive returns a total number of non-nil content nodes
+// in the node itself and its subtree.
+// CountRecursive counts all nodes including nil ones.
+// For exact number of non-nil nodes use CountRecursiveExact.
+func (n *Node) CountExactRecursive() int {
+	count := n.CountExact()
+	for _, x := range n.content {
+		count += x.CountExactRecursive()
+	}
+	return count
+}
+
+// ExtractSlot removes and returns the contents of a named slot as a Group node.
+// If slot does not exist or has no content, ExtractSlot returns nil.
+func (n *Node) ExtractSlot(name string) *Node {
+	for i, slot := range n.slots {
+		if slot.name != name {
 			continue
 		}
-
-		di := -1
-		for i := range dst.slots {
-			if dst.slots[i].name == name {
-				di = i
-				break
-			}
-		}
-
-		srcContent := n.slots[si].content
-
-		if di >= 0 {
-			if len(dst.slots[di].content) > 0 {
-				for _, node := range dst.slots[di].content {
-					put(node)
-				}
-				clear(dst.slots[di].content)
-				dst.slots[di].content = dst.slots[di].content[:0]
-			}
-			dst.slots[di].content = append(dst.slots[di].content, srcContent...)
-
-		} else {
-			dst.slots = append(dst.slots, slotNode{name: name, content: srcContent})
-		}
-
-		n.slots[si].content = nil
-		continue NAMES
+		g := slot.group
+		n.slots[i].group = nil
+		return g
 	}
+	return nil
+}
 
+// WithSlot executes fn with the slot's content if the specified slot exists and has content.
+// Otherwise, fn is not called. Slot contents is removed before passing it to fn.
+func (n *Node) WithSlot(name string, fn func(n *Node, slot *Node)) {
+	for i, slot := range n.slots {
+		if slot.name != name {
+			continue
+		}
+		if slot.group == nil {
+			return
+		}
+		g := slot.group
+		n.slots[i].group = nil
+		fn(n, g)
+		return
+	}
+}
+
+// MoveSlotTo moves named slots and their content to the destination node.
+func (n *Node) MoveSlotTo(dst *Node, names ...string) *Node {
+	for _, name := range names {
+		for i, slot := range n.slots {
+			if slot.name != name {
+				continue
+			}
+			if slot.group == nil {
+				continue
+			}
+			dst.Slot(name, slot.group)
+			n.slots[i].group = nil
+			break
+		}
+	}
 	return n
 }
 
@@ -988,6 +1064,12 @@ func (n *Node) Postpone(mods ...Mod) *Node {
 // Own marks the node as owned, preventing it from being returned to the pool by Release.
 func (n *Node) Own() *Node {
 	n.flag |= flagOwned
+	return n
+}
+
+// Disown removes the owned mark, allowing the node to be returned to the pool.
+func (n *Node) Disown() *Node {
+	n.flag &^= flagOwned
 	return n
 }
 
@@ -1535,11 +1617,7 @@ func put(n *Node) {
 
 	if len(n.slots) > 0 {
 		for _, slot := range n.slots {
-			for _, node := range slot.content {
-				put(node)
-			}
-			clear(slot.content)
-			slot.content = slot.content[:0]
+			slot.group.Release()
 			// if cap(slot.content) > 128 {
 			// 	slotContentSliceThrown.Add(1)
 			// 	slot.content = make([]*Node, 0, 64)

@@ -27,7 +27,7 @@ Non-goals:
 
 ### Methods API
 
-Direct method chaining is the most performant way to build trees.
+Direct method chaining is the most performant way to build trees:
 
 ```go
 root := htm.Div().
@@ -51,8 +51,7 @@ _ = root.Render(os.Stdout)
 
 Mods (or modifiers) are functions with the signature `func(*Node)`.
 This is primarily about extensibility and composition.
-It allows to define custom logic, reusable attribute groups, 
-or higher-level abstractions in separate packages.
+It allows to define custom logic and higher-level abstractions in separate packages.
 
 ```go
 root := htm.Div(
@@ -269,12 +268,23 @@ Some ideas are taken from `slog` to avoid a so-called "interface boxing".
 Nodes are pooled by default to reduce GC pressure.\
 The following contract should be respected:
 
-- **Release only the root**: call `.Release()` only on the root node.\
+- **Release only the root**: call `Release` only on the root node.\
   Package automatically handles the recursive release of all child nodes, attributes, and connected structures.
   Calling release on an already released node will result in panic or a corrupted pool.
 
-* **Do not reuse released nodes**: once released, a node may be
-    immediately reused by another goroutine.
+* **Do not use same nodes twice**: this leads to double-release.
+  ```go
+  node := htm.Span()
+  htm.Div().Content(
+      node,
+      htm.Div().Content(node), // this will corrupt the pool
+  )
+  ```
+  If you need to render the same node multiple times, use owned nodes (see `Own`).\
+  You can also disable automatic pooling and manage the node lifecycle yourself.
+
+- **Do not reuse released nodes**: once released, a node may be
+  immediately reused by another goroutine.
 
 Nodes can be marked as "owned" to prevent them from being returned to the pool
 (and prevent their subtree from being pooled).
@@ -310,16 +320,16 @@ htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "test")
 ```
 Building and rendering the tree above on a laptop with Ryzen 9 5900HX takes:
 ```
-Benchmark_Build-16              4325557     276.3 ns/op     0 B/op     0 allocs/op
-Benchmark_Render-16             2266953     528.6 ns/op     0 B/op     0 allocs/op
-Benchmark_BuildRender-16        1405723     851.6 ns/op     0 B/op     0 allocs/op
+Benchmark_Build-16              4095514     286.4 ns/op     0 B/op     0 allocs/op
+Benchmark_Render-16             3029446     390.9 ns/op     0 B/op     0 allocs/op
+Benchmark_BuildRender-16        1688143     710.6 ns/op     0 B/op     0 allocs/op
 ```
 
-A page with header, footer and a table with 100 rows:
+A page with header, footer and a table with 100 rows (~1400 nodes, see `htm_test.go`):
 ```
-Benchmark_Page_Build-16            8739  114445 ns/op     230 B/op     0 allocs/op
-Benchmark_Page_Render-16           9691  133146 ns/op       3 B/op     0 allocs/op
-Benchmark_Page_BuildRender-16      5023  252532 ns/op     100 B/op     0 allocs/op
+Benchmark_Page_Build-16            9744  115180 ns/op     268 B/op     0 allocs/op
+Benchmark_Page_Render-16           9000  118355 ns/op       0 B/op     0 allocs/op
+Benchmark_Page_BuildRender-16      4735  249076 ns/op     539 B/op     0 allocs/op
 ```
 
 ## Contribution

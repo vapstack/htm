@@ -192,7 +192,7 @@ func Test_Slots_SetAppendPrependDeleteExtract(t *testing.T) {
 
 	b := Text("B")
 	n.AppendSlot("x", b)
-	if len(n.ExtractSlot("x")) != 2 {
+	if len(n.ExtractSlotNodes("x")) != 2 {
 		t.Fatalf("expected 2 nodes after append")
 	}
 
@@ -200,7 +200,7 @@ func Test_Slots_SetAppendPrependDeleteExtract(t *testing.T) {
 	n.Slot("x", a, b)
 	c := Text("C")
 	n.PrependSlot("x", c)
-	ex := n.ExtractSlot("x")
+	ex := n.ExtractSlotNodes("x")
 	if len(ex) != 3 {
 		t.Fatalf("expected 3 nodes after prepend, got %d", len(ex))
 	}
@@ -238,9 +238,13 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 		t.Fatalf("expected dst slot to have content after move")
 	}
 
-	ex := dst.ExtractSlot("a")
+	ex := dst.ExtractSlotNodes("a")
+	if len(ex) != 1 {
+		t.Fatalf("expected 1 group node, got %v", len(ex))
+	}
+	ex = ex[0].ExtractContentNodes()
 	if len(ex) != 2 {
-		t.Fatalf("expected 2 moved nodes, got %d", len(ex))
+		t.Fatalf("expected 2 extracted nodes, got %v", len(ex))
 	}
 	if ex[0].String() != "1" || ex[1].String() != "2" {
 		t.Fatalf("unexpected moved slot content: %q, %q", ex[0].String(), ex[1].String())
@@ -253,18 +257,15 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 /**/
 
 func Benchmark_Build(b *testing.B) {
+	buildBasic().Release() // warmup
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	fn := func() {
-		n := buildBasic()
-		defer n.Release()
+	for b.Loop() {
+		buildBasic().Release()
 	}
-
-	for i := 0; i < b.N; i++ {
-		fn()
-	}
+	b.ReportMetric(float64(buildBasic().CountExactRecursive()+1), "nodes/op")
 }
 
 func buildBasic() *Node {
@@ -275,39 +276,36 @@ func buildBasic() *Node {
 }
 
 func Benchmark_Build_Mods(b *testing.B) {
+	build := func() *Node {
+		return Div(Class("flex flex-col items-center p-7 rounded-2xl"), Attr("id", "root"), Content(
+			Span(Class("a b c"), TextContent("hello")),
+			Span(Attr("data-x", "1"), TextContent("world")),
+		))
+	}
+	build().Release() // warmup
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	fn := func() {
-		n := Div(
-			Class("flex flex-col items-center p-7 rounded-2xl"), Attr("id", "root"), Content(
-				Span(Class("a b c"), TextContent("hello")),
-				Span(Attr("data-x", "1"), TextContent("world")),
-			),
-		)
-		defer n.Release()
+	for b.Loop() {
+		build().Release()
 	}
-
-	for i := 0; i < b.N; i++ {
-		fn()
-	}
+	b.ReportMetric(float64(build().CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Render(b *testing.B) {
 	n := buildBasic()
 	defer n.Release()
 
-	var buf bytes.Buffer
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		if err := n.Render(&buf); err != nil {
+	for b.Loop() {
+		if err := n.Render(io.Discard); err != nil {
 			b.Fatal(err)
 		}
 	}
+	b.ReportMetric(float64(n.CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Render_Mods(b *testing.B) {
@@ -321,49 +319,43 @@ func Benchmark_Render_Mods(b *testing.B) {
 	)
 	defer n.Release()
 
-	var buf bytes.Buffer
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		if err := n.Render(&buf); err != nil {
+	for b.Loop() {
+		if err := n.Render(io.Discard); err != nil {
 			b.Fatal(err)
 		}
 	}
+	b.ReportMetric(float64(n.CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_BuildRender(b *testing.B) {
 
-	buf := new(bytes.Buffer)
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	fn := func(buf *bytes.Buffer) {
-		n := Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
+	build := func() *Node {
+		return Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "root").Content(
 			Span().Class("a b c").Text("hello"),
 			Span().Attr("data-x", "1").Text("world"),
 		)
-		defer n.Release()
-
-		if err := n.Render(buf); err != nil {
-			b.Fatal(err)
-		}
 	}
+	build().Release() // warmup
 
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		fn(buf)
-	}
-}
-
-func Benchmark_BuildRender_Mods(b *testing.B) {
-	buf := new(bytes.Buffer)
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	fn := func(buf *bytes.Buffer) {
-		n := Div(
+	for b.Loop() {
+		n := build()
+		if err := n.Render(io.Discard); err != nil {
+			b.Fatal(err)
+		}
+		n.Release()
+	}
+	b.ReportMetric(float64(build().CountExactRecursive()+1), "nodes/op")
+}
+
+func Benchmark_BuildRender_Mods(b *testing.B) {
+	build := func() *Node {
+		return Div(
 			Class("flex flex-col items-center p-7 rounded-2xl"),
 			Attr("id", "root"),
 			Content(
@@ -371,17 +363,20 @@ func Benchmark_BuildRender_Mods(b *testing.B) {
 				Span(Attr("data-x", "1"), Content(Text("world"))),
 			),
 		)
-		defer n.Release()
+	}
+	build().Release() // warmup
 
-		if err := n.Render(buf); err != nil {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		n := build()
+		if err := n.Render(io.Discard); err != nil {
 			b.Fatal(err)
 		}
+		n.Release()
 	}
-
-	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		fn(buf)
-	}
+	b.ReportMetric(float64(build().CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Class_SetMulti(b *testing.B) {
@@ -395,7 +390,7 @@ func Benchmark_Class_SetMulti(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		n.class.reset()
 		n.Class(s1)
 		n.Class(s2)
@@ -410,7 +405,7 @@ func Benchmark_Class_SetAndMoveClassPrefix(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		src.class.reset()
 		dst.class.reset()
 
@@ -426,7 +421,7 @@ func Benchmark_Attrs_SetAndMoveAttrPrefix(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		src.attrs.reset()
 		dst.attrs.reset()
 
@@ -451,34 +446,36 @@ var benchData = []Item{
 	{5, "Eve", "eve@example.com"},
 }
 
+func buildCompareChaining() *Node {
+	list := Ul().Class("user-list")
+	for _, item := range benchData {
+		list.Append(
+			Li().Class("user-item").AttrValue("id", Int(item.ID)).Content(
+				Span().Class("name").Text(item.Name),
+				A().Href("mailto:"+item.Email).Text(item.Email), // strings concatenation will allocate
+			),
+		)
+	}
+	return list
+}
+
 func Benchmark_Compare_Htm(b *testing.B) {
+	buildCompareChaining().Release() // warmup
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		list := Ul().Class("user-list")
-
-		for _, item := range benchData {
-			list.Append(
-				Li().Class("user-item").AttrValue("id", Int(item.ID)).Content(
-					Span().Class("name").Text(item.Name),
-					A().Href("mailto:"+item.Email).Text(item.Email), // strings concatenation will allocate
-				),
-			)
-		}
-
+	for b.Loop() {
+		list := buildCompareChaining()
 		_ = list.Render(io.Discard)
 		list.Release()
 	}
+	b.ReportMetric(float64(buildCompareChaining().CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Compare_Htm_Mods(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	build := func() *Node {
 		list := Ul(Class("user-list"))
-
 		for _, item := range benchData {
 			list.Append(
 				Li(Class("user-item"), AttrValue("id", Int(item.ID)), Content(
@@ -487,10 +484,36 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 				)),
 			)
 		}
+		return list
+	}
+	build().Release() // warmup
 
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		list := build()
 		_ = list.Render(io.Discard)
 		list.Release()
 	}
+	b.ReportMetric(float64(build().CountExactRecursive()+1), "nodes/op")
+}
+
+// standard html/template
+
+func Benchmark_Compare_StdTemplate(b *testing.B) {
+	const tplString = `<ul class="user-list">{{range .}}<li class="user-item" id="{{.ID}}"><span class="name">{{.Name}}</span><a href="mailto:{{.Email}}">{{.Email}}</a></li>{{end}}</ul>`
+	tpl := template.Must(template.New("list").Parse(tplString))
+
+	_ = tpl.Execute(io.Discard, benchData)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		_ = tpl.Execute(io.Discard, benchData)
+	}
+	b.ReportMetric(float64(buildCompareChaining().CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Compare_Htm_Static(b *testing.B) {
@@ -509,34 +532,17 @@ func Benchmark_Compare_Htm_Static(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = static.Render(io.Discard)
 	}
-}
-
-// standard html/template
-
-func Benchmark_Compare_StdTemplate(b *testing.B) {
-	const tplString = `<ul class="user-list">{{range .}}<li class="user-item" id="{{.ID}}"><span class="name">{{.Name}}</span><a href="mailto:{{.Email}}">{{.Email}}</a></li>{{end}}</ul>`
-	tpl := template.Must(template.New("list").Parse(tplString))
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		_ = tpl.Execute(io.Discard, benchData)
-	}
+	b.ReportMetric(1, "nodes/op")
 }
 
 // the "baseline" speed, unsafe but fast
 
 func Benchmark_Compare_RawString(b *testing.B) {
 	buf := bytes.NewBuffer(make([]byte, 0, 64*1024))
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	run := func() {
 		buf.Reset()
 		buf.WriteString(`<ul class="user-list">`)
 
@@ -553,11 +559,20 @@ func Benchmark_Compare_RawString(b *testing.B) {
 		}
 		buf.WriteString(`</ul>`)
 	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		run()
+	}
+	b.ReportMetric(float64(5*len(benchData)+1), "nodes/op")
 }
 
 /**/
 
-func buildBenchPage(rows int) *Node {
+func buildBenchPage() *Node {
+	const rows = 100
 	return Div().
 		Class("min-h-screen bg-gray-50").
 		Attr("id", "root").
@@ -677,37 +692,45 @@ func buildRows(rows int) *Node {
 }
 
 func Benchmark_Page_Build(b *testing.B) {
+	buildBenchPage().Release() // warmup
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		n := buildBenchPage(100)
+	for b.Loop() {
+		n := buildBenchPage()
 		n.Release()
 	}
+	b.ReportMetric(float64(buildBenchPage().CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Page_Render(b *testing.B) {
-	b.ReportAllocs()
+	buildBenchPage().Release() // warmup
 
-	n := buildBenchPage(100)
+	n := buildBenchPage()
 	defer n.Release()
 
+	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := n.Render(io.Discard); err != nil {
 			b.Fatal(err)
 		}
 	}
+	b.ReportMetric(float64(n.CountExactRecursive()+1), "nodes/op")
 }
 
 func Benchmark_Page_BuildRender(b *testing.B) {
+	buildBenchPage().Release() // warmup
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		n := buildBenchPage(100)
+	for b.Loop() {
+		n := buildBenchPage()
 		if err := n.Render(io.Discard); err != nil {
 			b.Fatal(err)
 		}
 		n.Release()
 	}
+	b.ReportMetric(float64(buildBenchPage().CountExactRecursive()+1), "nodes/op")
 }
