@@ -129,15 +129,13 @@ func Btn(mods ...htm.Mod) *htm.Node {
     return htm.Button().
         Class("htm-btn").
         Apply(mods).
-        Postpone(func(n *htm.Node) {
+        DefaultContent(func(n *htm.Node) {
             doSomething(n)
-            if !n.HasContent() {
-                if icon := n.GetVar("icon").StringOrZero(); icon != "" {
-                    n.Append(IconFn(icon).Class("htm-btn-icon"))
-                }
-                if caption := n.GetVar("caption").StringOrZero(); caption != "" {
-                    n.Append(htm.Span().Class("htm-btn-caption").Text(caption))
-                }
+            if icon := n.GetVar("icon").StringOrZero(); icon != "" {
+                n.Append(IconFn(icon).Class("htm-btn-icon"))
+            }
+            if caption := n.GetVar("caption").StringOrZero(); caption != "" {
+                n.Append(htm.Span().Class("htm-btn-caption").Text(caption))
             }
         })
 }
@@ -155,7 +153,7 @@ func Btn(mods ...htm.Mod) *htm.Node {
         Class("my-btn").
         Apply(mods).
         Postpone(func(n *htm.Node) {
-            n.Prepend(n.ExtractSlot("icon")...)
+            n.Prepend(n.ExtractSlot("icon"))
         })
 }
 
