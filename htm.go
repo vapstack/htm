@@ -925,12 +925,11 @@ func (n *Node) addSlot(name string, op byte, nodes ...*Node) *Node {
 // DeleteSlot removes specific named slots and releases their content.
 func (n *Node) DeleteSlot(names ...string) *Node {
 	for _, name := range names {
-		for i := range n.slots {
-			if n.slots[i].name != name {
+		for i, slot := range n.slots {
+			if slot.name != name {
 				continue
 			}
-			g := n.slots[i].group
-			g.Release()
+			slot.group.Release()
 			n.slots[i].group = nil
 			break
 		}
@@ -947,9 +946,8 @@ func (n *Node) ExtractSlotNodes(name string) []*Node {
 		if slot.group == nil {
 			return nil
 		}
-		g := slot.group
-		extracted := g.ExtractContentNodes()
-		g.Release()
+		extracted := slot.group.ExtractContentNodes()
+		slot.group.Release()
 		n.slots[i].group = nil
 		return extracted
 	}
@@ -1068,10 +1066,10 @@ func (n *Node) Own() *Node {
 }
 
 // Disown removes the owned mark, allowing the node to be returned to the pool.
-func (n *Node) Disown() *Node {
-	n.flag &^= flagOwned
-	return n
-}
+// func (n *Node) Disown() *Node {
+// 	n.flag &^= flagOwned
+// 	return n
+// }
 
 // Owned returns true if the node has been marked as owned and will not be returned to the pool.
 func (n *Node) Owned() bool { return n.flag&flagOwned != 0 }
