@@ -19,7 +19,6 @@ import (
 type Mod = func(n *Node)
 
 // Node represents an HTML element or a special rendering node (e.g. text/raw/group).
-// Nodes are pooled; unless a node is marked as owned, it should be released via Release.
 type Node struct {
 	tag  string
 	flag byte
@@ -270,24 +269,32 @@ func AttrValue(name string, value ...TypedValue) Mod {
 // Attr should not be used to set a class attribute; use Class instead.
 func (n *Node) Attr(name string, value ...string) *Node {
 	if len(value) > 0 {
-		n.attrs.set(name, String(value[0]))
+		v := value[0]
+		n.attrs.set(name, String(v))
 		return n
 	}
 	n.attrs.set(name, Bool(true))
 	return n
 }
 
+// A is an alias for Attr
+func (n *Node) A(name string, value ...string) *Node { return n.Attr(name, value...) }
+
 // AttrBool sets the value of an attribute.
 // If value is omitted, it is treated as enabled.
 // To unset a boolean attribute, use BoolAttr(name, false) or RemoveAttr(name) or AttrValue(name, Unset).
 func (n *Node) AttrBool(name string, value ...bool) *Node {
 	if len(value) > 0 {
-		n.attrs.set(name, Bool(value[0]))
+		v := value[0]
+		n.attrs.set(name, Bool(v))
 		return n
 	}
 	n.attrs.set(name, Bool(true))
 	return n
 }
+
+// AB is an alias for AttrValue
+func (n *Node) AB(name string, value ...bool) *Node { return n.AttrBool(name, value...) }
 
 // AttrValue sets the value of an attribute.
 // If value is omitted, it sets a boolean attribute.
@@ -295,12 +302,16 @@ func (n *Node) AttrBool(name string, value ...bool) *Node {
 // AttrValue should not be used to set a class attribute; use Class instead.
 func (n *Node) AttrValue(name string, value ...TypedValue) *Node {
 	if len(value) > 0 {
-		n.attrs.set(name, value[0])
+		v := value[0]
+		n.attrs.set(name, v)
 		return n
 	}
 	n.attrs.set(name, Bool(true))
 	return n
 }
+
+// AV is an alias for AttrValue
+func (n *Node) AV(name string, value ...TypedValue) *Node { return n.AttrValue(name, value...) }
 
 // RemoveAttr removes the specified attributes from the node.
 func (n *Node) RemoveAttr(names ...string) *Node {
@@ -385,6 +396,9 @@ func (n *Node) Class(name string) *Node {
 	n.class.setMulti(name, true)
 	return n
 }
+
+// C is an alias for Class.
+func (n *Node) C(name string) *Node { return n.Class(name) }
 
 // RemoveClass removes the specified class names from the node.
 func (n *Node) RemoveClass(names ...string) *Node {
@@ -609,6 +623,12 @@ func (n *Node) Var(name string, value string) *Node {
 	return n
 }
 
+// V is an alias for Var.
+func (n *Node) V(name string, value string) *Node { return n.Var(name, value) }
+
+// VV is an alias for VarValue.
+func (n *Node) VV(name string, value string) *Node { return n.Var(name, value) }
+
 // VarValue attaches arbitrary user data (variable) to the node.
 // These variables are not rendered to HTML.
 func (n *Node) VarValue(name string, value TypedValue) *Node {
@@ -711,9 +731,12 @@ func (n *Node) Content(nodes ...*Node) *Node {
 	return n
 }
 
+// X is an alias for Content.
+func (n *Node) X(nodes ...*Node) *Node { return n.Content(nodes...) }
+
 // TextContent returns a Mod that sets (replaces) the content of the node to a single text node.
 // The content is HTML-escaped during rendering.
-func TextContent(s string) Mod { return func(n *Node) { n.Content(Text(s)) } }
+func TextContent(s string) Mod { return func(n *Node) { n.Text(s) } }
 
 // Text creates a text node from a string. The content is HTML-escaped during rendering.
 func Text(s string) *Node {
@@ -732,6 +755,9 @@ func (n *Node) Text(s string) *Node {
 	return n.Content(Text(s))
 }
 
+// T is an alias for Text.
+func (n *Node) T(s string) *Node { return n.Text(s) }
+
 // TextValue creates a text node from an arbitrary value. The content is HTML-escaped during rendering.
 func TextValue(v TypedValue) *Node {
 	if !v.Valid() {
@@ -748,6 +774,9 @@ func TextValue(v TypedValue) *Node {
 func (n *Node) TextValue(v TypedValue) *Node {
 	return n.Content(TextValue(v))
 }
+
+// TV is an alias for TextValue.
+func (n *Node) TV(v TypedValue) *Node { return n.TextValue(v) }
 
 /**/
 
@@ -1670,9 +1699,7 @@ func newAttrMap() *attrMap {
 }
 
 func (am *attrMap) reset() {
-	for i := range am.o {
-		am.o[i].value.any = nil
-	}
+	clear(am.o)
 	am.o = am.o[:0]
 }
 
@@ -1859,7 +1886,6 @@ OUTER:
 type (
 	classMap struct {
 		o []classEntry
-		// m map[string]int
 	}
 	classEntry struct {
 		name   string
