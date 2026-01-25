@@ -1113,6 +1113,9 @@ func (n *Node) MoveSlot(names ...string) Mod {
 /**/
 
 // Postpone adds mods to be applied just before rendering.
+func Postpone(mods ...Mod) Mod { return func(n *Node) { n.Postpone(mods...) } }
+
+// Postpone adds mods to be applied just before rendering.
 func (n *Node) Postpone(mods ...Mod) *Node {
 	n.postponed = append(n.postponed, mods...)
 	return n

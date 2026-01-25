@@ -160,6 +160,42 @@ func Btn(mods ...htm.Mod) *htm.Node {
 btn := Btn().Slot("icon", mysvg.Icon("close")))
 ```
 
+### Other useful notes
+
+For attributes, you can define a function that returns `(string, string)`:
+```go
+func MyProp(...) (string, string) { return "my-prop", "example" }
+// and use it like this:
+htm.Div().Attr(MyProp())
+```
+
+For complex operations it is often more performant to do everything inside a single mod:
+```go
+htm.Div(func (n *htm.Node) {
+    n.Attr(...)
+    n.Class(...)
+    doThing(n)
+    n.DefaultContent(...)
+    doOtherThing(n)
+    // etc.
+})
+```
+
+Mod functions can be used directly from types:
+```go
+func (t *MyType) LocalizedLabel(n *htm.Node) { ... }
+// ...
+htm.Button(t.LocalizedLabel)
+```
+
+A mod can be postponed until rendering to allow other things to happen:
+```go
+htm.Div(func (n *htm.Node) {
+  n.Postpone(mod1, mod2)
+  n.Postpone(func (n *htm.Node) { ... })
+})
+```
+
 ## Static rendering
 
 The package provides a helper to render a subtree once and cache the result.
