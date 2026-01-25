@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"math"
 	"reflect"
 	"slices"
@@ -75,7 +76,7 @@ func Build(tag string, mods ...Mod) *Node {
 // Group creates a logical group of nodes that renders its children without a wrapping parent tag.
 func Group(nodes ...*Node) *Node {
 	n := Get()
-	n.tag = "$group"
+	n.tag = "@group"
 	n.content = append(n.content, nodes...)
 	n.writeFn = renderGroup
 	return n
@@ -88,7 +89,7 @@ func RawString(s string) *Node {
 		return nil
 	}
 	n := Get()
-	n.tag = "$raw"
+	n.tag = "@raw"
 	n.value = String(s)
 	n.writeFn = renderRaw
 	return n
@@ -101,7 +102,7 @@ func RawBytes(b []byte) *Node {
 		return nil
 	}
 	n := Get()
-	n.tag = "$raw"
+	n.tag = "@raw"
 	n.value = Bytes(b)
 	n.writeFn = renderRaw
 	return n
@@ -340,6 +341,9 @@ func (n *Node) EachAttr(fn func(string, TypedValue) bool) *Node {
 	return n
 }
 
+// Attrs returns an iterator over active attributes.
+func (n *Node) Attrs() iter.Seq2[string, TypedValue] { return n.attrs.each }
+
 // MoveAttrTo moves specific attributes from the current node to the destination node.
 func (n *Node) MoveAttrTo(dst *Node, names ...string) *Node {
 	if n == dst {
@@ -427,6 +431,9 @@ func (n *Node) EachClass(fn func(string) bool) *Node {
 	return n
 }
 
+// Classes returns iterator over active classes.
+func (n *Node) Classes() iter.Seq[string] { return n.class.each }
+
 // MoveClassTo moves specific classes from the current node to the destination node.
 func (n *Node) MoveClassTo(dst *Node, names ...string) *Node {
 	for _, name := range names {
@@ -439,13 +446,14 @@ func (n *Node) MoveClassTo(dst *Node, names ...string) *Node {
 
 // CopyClassPrefixTo copies classes starting with the given prefixes to the destination node.
 func (n *Node) CopyClassPrefixTo(dst *Node, prefixes ...string) *Node {
+	l := len(n.class.o)
 OUTER:
-	for i := len(n.class.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := n.class.o[i]
 		if !e.active {
 			continue
 		}
-		for k := i + 1; k < len(n.class.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if n.class.o[k].name == e.name {
 				continue OUTER
 			}
@@ -462,13 +470,14 @@ OUTER:
 
 // MoveClassPrefixTo moves classes starting with the given prefixes to the destination node.
 func (n *Node) MoveClassPrefixTo(dst *Node, prefixes ...string) *Node {
+	l := len(n.class.o)
 OUTER:
-	for i := len(n.class.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := n.class.o[i]
 		if !e.active {
 			continue
 		}
-		for k := i + 1; k < len(n.class.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if n.class.o[k].name == e.name {
 				continue OUTER
 			}
@@ -486,13 +495,14 @@ OUTER:
 
 // CopyClassSuffixTo copies classes ending with the given suffixes to the destination node.
 func (n *Node) CopyClassSuffixTo(dst *Node, suffixes ...string) *Node {
+	l := len(n.class.o)
 OUTER:
-	for i := len(n.class.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := n.class.o[i]
 		if !e.active {
 			continue
 		}
-		for k := i + 1; k < len(n.class.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if n.class.o[k].name == e.name {
 				continue OUTER
 			}
@@ -509,13 +519,14 @@ OUTER:
 
 // MoveClassSuffixTo moves classes ending with the given suffixes to the destination node.
 func (n *Node) MoveClassSuffixTo(dst *Node, suffixes ...string) *Node {
+	l := len(n.class.o)
 OUTER:
-	for i := len(n.class.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := n.class.o[i]
 		if !e.active {
 			continue
 		}
-		for k := i + 1; k < len(n.class.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if n.class.o[k].name == e.name {
 				continue OUTER
 			}
@@ -744,7 +755,7 @@ func Text(s string) *Node {
 		return nil
 	}
 	n := Get()
-	n.tag = "$text"
+	n.tag = "@text"
 	n.value = String(s)
 	n.writeFn = renderText
 	return n
@@ -764,7 +775,7 @@ func TextValue(v TypedValue) *Node {
 		return nil
 	}
 	n := Get()
-	n.tag = "$text"
+	n.tag = "@text"
 	n.value = v
 	n.writeFn = renderText
 	return n
@@ -824,8 +835,8 @@ func (n *Node) NoContent() bool {
 
 // RemoveContent clears the content and recursively releases all child nodes.
 func (n *Node) RemoveContent() *Node {
-	for _, c := range n.content {
-		put(c)
+	for _, x := range n.content {
+		x.Release()
 	}
 	clear(n.content)
 	n.content = n.content[:0]
@@ -856,14 +867,26 @@ func (n *Node) MoveContentTo(dst *Node) *Node {
 	return n
 }
 
-// EachContent calls fn for each child node. Iteration stops if fn returns false.
-func (n *Node) EachContent(fn func(*Node) bool) *Node {
+// Each calls fn for each non-nil child node.
+// Iteration stops if fn returns false.
+func (n *Node) Each(fn func(*Node) bool) *Node {
 	for _, node := range n.content {
 		if node != nil && !fn(node) {
 			return n
 		}
 	}
 	return n
+}
+
+// All returns an iterator over node's contents.
+func (n *Node) All() iter.Seq[*Node] {
+	return func(yield func(*Node) bool) {
+		for _, node := range n.content {
+			if node != nil && !yield(node) {
+				return
+			}
+		}
+	}
 }
 
 // MoveContent is a Mod that moves the content to a destination node.
@@ -983,14 +1006,11 @@ func (n *Node) ExtractSlotNodes(name string) []*Node {
 	return nil
 }
 
-// Count returns a number of content nodes including nil nodes.
-// For exact number of non-nil nodes use CountExact.
+// Count returns a number of non-nil content nodes.
 func (n *Node) Count() int {
-	return len(n.content)
-}
-
-// CountExact returns a number of non-nil content nodes.
-func (n *Node) CountExact() int {
+	if n == nil {
+		return 0
+	}
 	count := 0
 	for _, x := range n.content {
 		if x != nil {
@@ -998,13 +1018,15 @@ func (n *Node) CountExact() int {
 		}
 	}
 	return count
+
 }
 
-// CountRecursive returns a total number of content nodes
+// CountRecursive returns a total number of non-nil content nodes
 // in the node itself and its subtree.
-// CountRecursive counts all nodes including nil ones.
-// For exact number of non-nil nodes use CountRecursiveExact.
 func (n *Node) CountRecursive() int {
+	if n == nil {
+		return 0
+	}
 	count := n.Count()
 	for _, x := range n.content {
 		count += x.CountRecursive()
@@ -1012,11 +1034,21 @@ func (n *Node) CountRecursive() int {
 	return count
 }
 
-// CountExactRecursive returns a total number of non-nil content nodes
+// CountExact returns a number of content nodes including nil nodes.
+func (n *Node) CountExact() int {
+	if n == nil {
+		return 0
+	}
+	return len(n.content)
+}
+
+// CountExactRecursive returns a total number of content nodes
 // in the node itself and its subtree.
-// CountRecursive counts all nodes including nil ones.
-// For exact number of non-nil nodes use CountRecursiveExact.
+// CountExactRecursive counts all nodes including nil ones.
 func (n *Node) CountExactRecursive() int {
+	if n == nil {
+		return 0
+	}
 	count := n.CountExact()
 	for _, x := range n.content {
 		count += x.CountExactRecursive()
@@ -1107,8 +1139,20 @@ func (n *Node) Owned() bool { return n.flag&flagOwned != 0 }
 func (n *Node) UnsafeScript() { n.flag |= flagScript }
 
 // Release returns the node and its children to the pool for reuse.
-// If the node is marked as Owned, neither it nor its subtree will be returned to the pool.
-func (n *Node) Release() { put(n) }
+// If the node is marked as Owned or pooling is disabled, Release is no-op.
+func (n *Node) Release() {
+	if NoPool {
+		return
+	}
+	if n == nil || n.flag&flagOwned != 0 {
+		return
+	}
+	if !n.acquired.CompareAndSwap(true, false) {
+		panic("htm: attempt to release an already released node")
+	}
+	n.Clear()
+	nodePool.Put(n)
+}
 
 // SetPoolingNeighbor links another node to be released together with n.
 func (n *Node) SetPoolingNeighbor(x *Node) { n.attached = append(n.attached, x) }
@@ -1310,15 +1354,15 @@ func writeClass(w io.Writer, classes []classEntry) error {
 	if _, err := w.Write(classPrefix); err != nil {
 		return err
 	}
-
+	l := len(classes)
 	first := true
 OUTER:
-	for i := 0; i < len(classes); i++ {
+	for i := 0; i < l; i++ {
 		c := classes[i]
 		if !c.active || !ValidClass(c.name) {
 			continue
 		}
-		for k := i + 1; k < len(classes); k++ {
+		for k := i + 1; k < l; k++ {
 			if classes[k].name == c.name {
 				continue OUTER
 			}
@@ -1341,8 +1385,9 @@ OUTER:
 }
 
 func writeAttributes(w io.Writer, attrs []valueEntry) error {
+	l := len(attrs)
 OUTER:
-	for i := 0; i < len(attrs); i++ {
+	for i := 0; i < l; i++ {
 		a := attrs[i]
 		if !a.value.Valid() {
 			continue
@@ -1350,7 +1395,7 @@ OUTER:
 		if !ValidAttr(a.name) {
 			continue
 		}
-		for k := i + 1; k < len(attrs); k++ {
+		for k := i + 1; k < l; k++ {
 			if attrs[k].name == a.name {
 				continue OUTER
 			}
@@ -1604,22 +1649,15 @@ func Get() *Node {
 // 	attachedSliceThrown    atomic.Uint64
 // )
 
-func put(n *Node) {
-	if n == nil {
-		return
-	}
-	if NoPool {
-		return
-	}
-	if n.flag&flagOwned != 0 {
-		return
-	}
-	if !n.acquired.CompareAndSwap(true, false) {
-		panic("htm: attempt to release an already released node")
-	}
-
+// Clear resets the node. All children are returned to the pool unless pooling is disabled.
+// Owned flag remains unchanged.
+func (n *Node) Clear() {
 	n.tag = "div"
-	n.flag = 0
+	if n.flag&flagOwned != 0 {
+		n.flag = flagOwned
+	} else {
+		n.flag = 0
+	}
 	n.value = TypedValue{}
 
 	n.attrs.reset()
@@ -1632,7 +1670,7 @@ func put(n *Node) {
 	// } else
 	if len(n.content) > 0 {
 		for _, node := range n.content {
-			put(node)
+			node.Release()
 		}
 		clear(n.content)
 		n.content = n.content[:0]
@@ -1668,7 +1706,7 @@ func put(n *Node) {
 
 	if len(n.attached) > 0 {
 		for _, attached := range n.attached {
-			put(attached)
+			attached.Release()
 		}
 		clear(n.attached)
 		n.attached = n.attached[:0]
@@ -1683,7 +1721,6 @@ func put(n *Node) {
 		n.postponed = n.postponed[:0]
 	}
 
-	nodePool.Put(n)
 }
 
 /**/
@@ -1760,8 +1797,9 @@ func (am *attrMap) hasAll(names ...string) bool {
 }
 
 func (am *attrMap) hasPrefix(prefix string) bool {
+	l := len(am.o)
 OUTER:
-	for i := len(am.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := am.o[i]
 		if !e.value.Valid() {
 			continue
@@ -1769,7 +1807,7 @@ OUTER:
 		if !strings.HasPrefix(e.name, prefix) {
 			continue
 		}
-		for k := i + 1; k < len(am.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if am.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1780,8 +1818,9 @@ OUTER:
 }
 
 func (am *attrMap) hasSuffix(suffix string) bool {
+	l := len(am.o)
 OUTER:
-	for i := len(am.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := am.o[i]
 		if !e.value.Valid() {
 			continue
@@ -1789,7 +1828,7 @@ OUTER:
 		if !strings.HasSuffix(e.name, suffix) {
 			continue
 		}
-		for k := i + 1; k < len(am.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if am.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1800,13 +1839,14 @@ OUTER:
 }
 
 func (am *attrMap) each(fn func(string, TypedValue) bool) {
+	l := len(am.o)
 OUTER:
-	for i := len(am.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := am.o[i]
 		if !e.value.Valid() {
 			continue
 		}
-		for k := i + 1; k < len(am.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if am.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1840,8 +1880,9 @@ func (am *attrMap) extract(name string) (TypedValue, bool) {
 }
 
 func (am *attrMap) movePrefixTo(dst *attrMap, prefix string) {
+	l := len(am.o)
 OUTER:
-	for i := len(am.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := am.o[i]
 		v := e.value
 		if !v.Valid() {
@@ -1850,7 +1891,7 @@ OUTER:
 		if !strings.HasPrefix(e.name, prefix) {
 			continue
 		}
-		for k := i + 1; k < len(am.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if am.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1861,8 +1902,9 @@ OUTER:
 }
 
 func (am *attrMap) moveSuffixTo(dst *attrMap, suffix string) {
+	l := len(am.o)
 OUTER:
-	for i := len(am.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := am.o[i]
 		v := e.value
 		if !v.Valid() {
@@ -1871,7 +1913,7 @@ OUTER:
 		if !strings.HasSuffix(e.name, suffix) {
 			continue
 		}
-		for k := i + 1; k < len(am.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if am.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1954,8 +1996,9 @@ func (cm *classMap) hasAll(names ...string) bool {
 }
 
 func (cm *classMap) hasPrefix(prefix string) bool {
+	l := len(cm.o)
 OUTER:
-	for i := len(cm.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := cm.o[i]
 		if !e.active {
 			continue
@@ -1963,7 +2006,7 @@ OUTER:
 		if !strings.HasPrefix(e.name, prefix) {
 			continue
 		}
-		for k := i + 1; k < len(cm.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if cm.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1976,8 +2019,9 @@ OUTER:
 }
 
 func (cm *classMap) hasSuffix(suffix string) bool {
+	l := len(cm.o)
 OUTER:
-	for i := len(cm.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := cm.o[i]
 		if !e.active {
 			continue
@@ -1985,7 +2029,7 @@ OUTER:
 		if !strings.HasSuffix(e.name, suffix) {
 			continue
 		}
-		for k := i + 1; k < len(cm.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if cm.o[k].name == e.name {
 				continue OUTER
 			}
@@ -1996,13 +2040,14 @@ OUTER:
 }
 
 func (cm *classMap) each(fn func(string) bool) {
+	l := len(cm.o)
 OUTER:
-	for i := len(cm.o) - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		e := cm.o[i]
 		if !e.active {
 			continue
 		}
-		for k := i + 1; k < len(cm.o); k++ {
+		for k := i + 1; k < l; k++ {
 			if cm.o[k].name == e.name {
 				continue OUTER
 			}
