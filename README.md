@@ -228,7 +228,8 @@ func RenderHeader() *htm.Node {
 }
 ```
 
-Caching is done by using the function pointer as a key.
+Caching is done by using the **function pointer as a key**,
+closures are therefore executed at most once, regardless of captured variables.
 
 ## Typed Values
 

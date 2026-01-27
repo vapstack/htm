@@ -714,6 +714,9 @@ var staticMap sync.Map
 
 // Static renders the node returned by fn once and caches the result globally.
 // Subsequent calls return a cached raw byte node, avoiding re-rendering.
+//
+// The cache key is the function pointer; closures are cached by function address
+// and therefore execute at most once, regardless of captured variables.
 func Static(fn func() *Node) *Node {
 	ptr := reflect.ValueOf(fn).Pointer()
 	if v, ok := staticMap.Load(ptr); ok {
@@ -728,6 +731,10 @@ func Static(fn func() *Node) *Node {
 }
 
 // StaticContent sets the content of the node to the cached output of fn.
+// Subsequent calls return a cached raw byte node, avoiding re-rendering.
+//
+// The cache key is the function pointer; closures are cached by function address
+// and therefore execute at most once, regardless of captured variables.
 func (n *Node) StaticContent(fn func() *Node) *Node { return n.Content(Static(fn)) }
 
 /**/
