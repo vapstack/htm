@@ -265,6 +265,7 @@ func Benchmark_Build(b *testing.B) {
 	for b.Loop() {
 		buildBasic().Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(buildBasic().CountRecursive()+1), "nodes/op")
 }
 
@@ -290,6 +291,7 @@ func Benchmark_Build_Mods(b *testing.B) {
 	for b.Loop() {
 		build().Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
 }
 
@@ -305,6 +307,7 @@ func Benchmark_Render(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
 }
 
@@ -327,6 +330,7 @@ func Benchmark_Render_Mods(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
 }
 
@@ -350,6 +354,7 @@ func Benchmark_BuildRender(b *testing.B) {
 		}
 		n.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
 }
 
@@ -376,6 +381,7 @@ func Benchmark_BuildRender_Mods(b *testing.B) {
 		}
 		n.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
 }
 
@@ -470,6 +476,7 @@ func Benchmark_Compare_Htm(b *testing.B) {
 		_ = list.Render(io.Discard)
 		list.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(buildCompareChaining().CountRecursive()+1), "nodes/op")
 }
 
@@ -496,6 +503,7 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 		_ = list.Render(io.Discard)
 		list.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
 }
 
@@ -513,6 +521,7 @@ func Benchmark_Compare_StdTemplate(b *testing.B) {
 	for b.Loop() {
 		_ = tpl.Execute(io.Discard, benchData)
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(buildCompareChaining().CountRecursive()+1), "nodes/op")
 }
 
@@ -535,6 +544,7 @@ func Benchmark_Compare_Htm_Static(b *testing.B) {
 	for b.Loop() {
 		_ = static.Render(io.Discard)
 	}
+	b.StopTimer()
 	b.ReportMetric(1, "nodes/op")
 }
 
@@ -566,6 +576,7 @@ func Benchmark_Compare_RawString(b *testing.B) {
 	for b.Loop() {
 		run()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(5*len(benchData)+1), "nodes/op")
 }
 
@@ -701,6 +712,7 @@ func Benchmark_Page_Build(b *testing.B) {
 		n := buildBenchPage()
 		n.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(buildBenchPage().CountRecursive()+1), "nodes/op")
 }
 
@@ -717,6 +729,7 @@ func Benchmark_Page_Render(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
 }
 
@@ -732,5 +745,6 @@ func Benchmark_Page_BuildRender(b *testing.B) {
 		}
 		n.Release()
 	}
+	b.StopTimer()
 	b.ReportMetric(float64(buildBenchPage().CountRecursive()+1), "nodes/op")
 }
