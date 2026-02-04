@@ -656,6 +656,19 @@ func (n *Node) VarValue(name string, value TypedValue) *Node {
 	return n
 }
 
+// EachVar iterates over all active classes, calling fn for each.
+// Iteration stops if fn returns false.
+func (n *Node) EachVar(fn func(string, TypedValue) bool) {
+	for _, v := range n.vars {
+		if v.value.Valid() {
+			fn(v.name, v.value)
+		}
+	}
+}
+
+// Vars returns iterator over active classes.
+func (n *Node) Vars() iter.Seq2[string, TypedValue] { return n.EachVar }
+
 // RemoveVar removes the specified variables from the node.
 func (n *Node) RemoveVar(names ...string) *Node {
 	for _, name := range names {
@@ -1868,10 +1881,9 @@ OUTER:
 }
 
 func (am *attrMap) set(name string, v TypedValue) {
-	if name == "" {
-		return
+	if name != "" {
+		am.o = append(am.o, valueEntry{name: name, value: v})
 	}
-	am.o = append(am.o, valueEntry{name: name, value: v})
 }
 
 func (am *attrMap) extract(name string) (TypedValue, bool) {
