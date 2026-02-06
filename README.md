@@ -7,9 +7,10 @@
 
 A relatively fast, zero-allocation HTML tree builder and renderer for Go.
 
-It provides a `Node` type with a fluent method API (chaining) and an optional functional API
-that simplifies composition of reusable building blocks. While fully capable of direct use, 
-its primary design goal is to serve as a foundation for higher-level DSLs and component frameworks. 
+It provides a `Node` type with a chaining method API 
+and an optional functional API that simplifies composition. 
+While fully capable of direct use, its primary goal is to serve as a foundation 
+for higher-level DSLs and component frameworks. 
 
 ### Goals
 
@@ -162,23 +163,16 @@ btn := Btn().Slot("icon", mysvg.Icon("close")))
 
 ### Other useful notes
 
-For attributes, you can define a function that returns `(string, string)`:
+Everything can be overwritten / replaced:
 ```go
-func MyProp(...) (string, string) { return "my-prop", "example" }
-// and use it like this:
-htm.Div().Attr(MyProp())
-```
+htm.A().Href("#").Href("#abc") // result is "#abc"
+htm.Button().Class("a b c").RemoveClass("a") // result is "b c"
+htm.Button().Content(Span()).Content(Div()) // result is div
+htm.Button().Content(Span()).Prepend(Div()) // result is div and span
 
-For complex operations it is often more performant to do everything inside a single mod:
-```go
-htm.Div(func (n *htm.Node) {
-    n.Attr(...)
-    n.Class(...)
-    doThing(n)
-    n.DefaultContent(...)
-    doOtherThing(n)
-    // etc.
-})
+card := ui.Card().Slot("footer", htm.Div(), htm.Span())
+card.Slot("footer", htm.Button()) // footer now contains only a button
+card.AppendSlot("footer", htm.Div()) // footer now contains a button and a div
 ```
 
 Mod functions can be used directly from types:
@@ -194,6 +188,25 @@ htm.Div(func (n *htm.Node) {
   n.Postpone(mod1, mod2)
   n.Postpone(func (n *htm.Node) { ... })
 })
+```
+
+For complex operations it is often more performant to do everything inside a single mod:
+```go
+htm.Div(func (n *htm.Node) {
+    n.Attr(...)
+    n.Class(...)
+    doThing(n)
+    n.DefaultContent(...)
+    doOtherThing(n)
+    // etc.
+})
+```
+
+Functions returning two values can be used directly:
+```go
+func MyProp(...) (string, string) { return "my-prop", "example" }
+
+htm.Div().Attr(MyProp())
 ```
 
 ## Static rendering
@@ -353,18 +366,18 @@ htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "test")
     htm.Span().Attr("data-x", "1").Text("world"),
 )
 ```
-Building and rendering the tree above on a laptop with Ryzen 9 5900HX takes:
+Building and rendering the tree above on a laptop takes:
 ```
-Benchmark_Build-16              4095514     286.4 ns/op     0 B/op     0 allocs/op
-Benchmark_Render-16             3029446     390.9 ns/op     0 B/op     0 allocs/op
-Benchmark_BuildRender-16        1688143     710.6 ns/op     0 B/op     0 allocs/op
+Benchmark_Build-16                 4029265     294.8 ns/op     0 B/op     0 allocs/op
+Benchmark_Render/Default-16        4277874     282.6 ns/op     0 B/op     0 allocs/op
+Benchmark_BuildRender/Default-16   1980176     606.2 ns/op     0 B/op     0 allocs/op
 ```
 
 A page with header, footer and a table with 100 rows (~1400 nodes, see `htm_test.go`):
 ```
-Benchmark_Page_Build-16            9744  115180 ns/op     268 B/op     0 allocs/op
-Benchmark_Page_Render-16           9000  118355 ns/op       0 B/op     0 allocs/op
-Benchmark_Page_BuildRender-16      4735  249076 ns/op     539 B/op     0 allocs/op
+Benchmark_Page_Build-16                10000  114562 ns/op     271 B/op     0 allocs/op
+Benchmark_Page_Render/Default-16       12933   93111 ns/op       0 B/op     0 allocs/op
+Benchmark_Page_BuildRender/Default-16   6214  206834 ns/op     427 B/op     0 allocs/op
 ```
 
 ## Contribution

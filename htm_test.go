@@ -239,12 +239,8 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 	}
 
 	ex := dst.ExtractSlotNodes("a")
-	if len(ex) != 1 {
-		t.Fatalf("expected 1 group node, got %v", len(ex))
-	}
-	ex = ex[0].ExtractContentNodes()
 	if len(ex) != 2 {
-		t.Fatalf("expected 2 extracted nodes, got %v", len(ex))
+		t.Fatalf("expected 2 group nodes, got %v", len(ex))
 	}
 	if ex[0].String() != "1" || ex[1].String() != "2" {
 		t.Fatalf("unexpected moved slot content: %q, %q", ex[0].String(), ex[1].String())
@@ -257,6 +253,8 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 /**/
 
 func Benchmark_Build(b *testing.B) {
+	cnt := buildBasic().Count(CountTree)
+
 	buildBasic().Release() // warmup
 
 	b.ReportAllocs()
@@ -266,7 +264,7 @@ func Benchmark_Build(b *testing.B) {
 		buildBasic().Release()
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(buildBasic().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 func buildBasic() *Node {
@@ -283,6 +281,9 @@ func Benchmark_Build_Mods(b *testing.B) {
 			Span(Attr("data-x", "1"), TextContent("world")),
 		))
 	}
+
+	cnt := build().Count(CountTree)
+
 	build().Release() // warmup
 
 	b.ReportAllocs()
@@ -292,23 +293,38 @@ func Benchmark_Build_Mods(b *testing.B) {
 		build().Release()
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 func Benchmark_Render(b *testing.B) {
 	n := buildBasic()
-	defer n.Release()
+	cnt := n.Count(CountTree)
 
-	b.ReportAllocs()
-	b.ResetTimer()
+	b.Run("Default", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
 
-	for b.Loop() {
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+		for b.Loop() {
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
 		}
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			if err := n.Render(io.Discard, RenderAssumeNoReplace); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
 }
 
 func Benchmark_Render_Mods(b *testing.B) {
@@ -320,18 +336,34 @@ func Benchmark_Render_Mods(b *testing.B) {
 			Span(Attr("data-x", "1"), Content(Text("world"))),
 		),
 	)
-	defer n.Release()
 
-	b.ReportAllocs()
-	b.ResetTimer()
+	cnt := n.Count(CountTree)
 
-	for b.Loop() {
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+	b.Run("Default", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
 		}
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
 }
 
 func Benchmark_BuildRender(b *testing.B) {
@@ -342,20 +374,43 @@ func Benchmark_BuildRender(b *testing.B) {
 			Span().Attr("data-x", "1").Text("world"),
 		)
 	}
+
+	cnt := build().Count(CountTree)
+
 	build().Release() // warmup
 
-	b.ReportAllocs()
-	b.ResetTimer()
+	b.Run("Default", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
 
-	for b.Loop() {
-		n := build()
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+		for b.Loop() {
+			n := build()
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
 		}
-		n.Release()
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	build().Release() // warmup
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			n := build()
+			if err := n.Render(io.Discard, RenderAssumeNoReplace); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
 }
 
 func Benchmark_BuildRender_Mods(b *testing.B) {
@@ -369,20 +424,44 @@ func Benchmark_BuildRender_Mods(b *testing.B) {
 			),
 		)
 	}
+
+	cnt := build().Count(CountTree)
+
 	build().Release() // warmup
 
-	b.ReportAllocs()
-	b.ResetTimer()
+	b.Run("Default", func(b *testing.B) {
 
-	for b.Loop() {
-		n := build()
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			n := build()
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
 		}
-		n.Release()
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	build().Release() // warmup
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			n := build()
+			if err := n.Render(io.Discard, RenderAssumeNoReplace); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
 }
 
 func Benchmark_Class_SetMulti(b *testing.B) {
@@ -466,6 +545,8 @@ func buildCompareChaining() *Node {
 }
 
 func Benchmark_Compare_Htm(b *testing.B) {
+	cnt := buildCompareChaining().Count(CountTree)
+
 	buildCompareChaining().Release() // warmup
 
 	b.ReportAllocs()
@@ -477,7 +558,7 @@ func Benchmark_Compare_Htm(b *testing.B) {
 		list.Release()
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(buildCompareChaining().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 func Benchmark_Compare_Htm_Mods(b *testing.B) {
@@ -493,6 +574,8 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 		}
 		return list
 	}
+	cnt := build().Count(CountTree)
+
 	build().Release() // warmup
 
 	b.ReportAllocs()
@@ -504,7 +587,7 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 		list.Release()
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(build().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 // standard html/template
@@ -513,7 +596,9 @@ func Benchmark_Compare_StdTemplate(b *testing.B) {
 	const tplString = `<ul class="user-list">{{range .}}<li class="user-item" id="{{.ID}}"><span class="name">{{.Name}}</span><a href="mailto:{{.Email}}">{{.Email}}</a></li>{{end}}</ul>`
 	tpl := template.Must(template.New("list").Parse(tplString))
 
-	_ = tpl.Execute(io.Discard, benchData)
+	cnt := buildCompareChaining().Count(CountTree)
+
+	_ = tpl.Execute(io.Discard, benchData) // warmup?
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -522,7 +607,7 @@ func Benchmark_Compare_StdTemplate(b *testing.B) {
 		_ = tpl.Execute(io.Discard, benchData)
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(buildCompareChaining().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 func Benchmark_Compare_Htm_Static(b *testing.B) {
@@ -703,6 +788,8 @@ func buildRows(rows int) *Node {
 }
 
 func Benchmark_Page_Build(b *testing.B) {
+	cnt := buildBenchPage().Count(CountTree)
+
 	buildBenchPage().Release() // warmup
 
 	b.ReportAllocs()
@@ -713,38 +800,119 @@ func Benchmark_Page_Build(b *testing.B) {
 		n.Release()
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(buildBenchPage().CountRecursive()+1), "nodes/op")
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
 
 func Benchmark_Page_Render(b *testing.B) {
 	buildBenchPage().Release() // warmup
 
 	n := buildBenchPage()
-	defer n.Release()
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for b.Loop() {
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+	cnt := n.Count(CountTree)
+
+	b.Run("Default", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
 		}
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(n.CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	buildBenchPage().Release() // warmup
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			if err := n.Render(io.Discard, RenderAssumeNoReplace); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
 }
 
 func Benchmark_Page_BuildRender(b *testing.B) {
+
+	cnt := buildBenchPage().Count(CountTree)
+
 	buildBenchPage().Release() // warmup
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for b.Loop() {
-		n := buildBenchPage()
-		if err := n.Render(io.Discard); err != nil {
-			b.Fatal(err)
+	b.Run("Default", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n := buildBenchPage()
+			if err := n.Render(io.Discard); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
 		}
-		n.Release()
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(buildBenchPage().CountRecursive()+1), "nodes/op")
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+
+	buildBenchPage().Release() // warmup
+
+	b.Run("AssumeNoReplace", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n := buildBenchPage()
+			if err := n.Render(io.Discard, RenderAssumeNoReplace); err != nil {
+				b.Fatal(err)
+			}
+			n.Release()
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+}
+
+func Benchmark_Count(b *testing.B) {
+
+	n := buildBenchPage()
+
+	b.Run("CountContent", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Count()
+		}
+		b.StopTimer()
+	})
+
+	b.Run("CountRecursive", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Count(CountRecursive)
+		}
+		b.StopTimer()
+	})
+
+	b.Run("CountTree", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Count(CountTree)
+		}
+		b.StopTimer()
+	})
+
+	b.Run("CountTreeNonNil", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Count(CountTree | CountSkipNil)
+		}
+		b.StopTimer()
+	})
+
 }

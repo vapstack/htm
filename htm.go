@@ -3,6 +3,7 @@ package htm
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -80,6 +81,17 @@ func Group(nodes ...*Node) *Node {
 	n.content = append(n.content, nodes...)
 	n.writeFn = renderGroup
 	return n
+}
+
+// Join returns a Group if at least one of the provided nodes is not nil.
+// Otherwise, it returns nil.
+func Join(nodes ...*Node) *Node {
+	for _, n := range nodes {
+		if n != nil {
+			return Group(nodes...)
+		}
+	}
+	return nil
 }
 
 // RawString creates a raw HTML node from a string.
@@ -293,9 +305,6 @@ func (n *Node) AttrBool(name string, value ...bool) *Node {
 	n.attrs.set(name, Bool(true))
 	return n
 }
-
-// AB is an alias for AttrValue
-func (n *Node) AB(name string, value ...bool) *Node { return n.AttrBool(name, value...) }
 
 // AttrValue sets the value of an attribute.
 // If value is omitted, it sets a boolean attribute.
@@ -934,32 +943,17 @@ func Slot(name string, nodes ...*Node) Mod {
 
 // Slot sets the content of a named slot. If the slot exists, its content is replaced.
 func (n *Node) Slot(name string, nodes ...*Node) *Node {
-	for _, node := range nodes {
-		if node != nil { // if at least one is not nil - add all
-			return n.addSlot(name, slotReplace, nodes...)
-		}
-	}
-	return n
+	return n.addSlot(name, slotReplace, nodes...)
 }
 
 // AppendSlot adds nodes to the end of a named slot.
 func (n *Node) AppendSlot(name string, nodes ...*Node) *Node {
-	for _, node := range nodes {
-		if node != nil { // if at least one is not nil - add all
-			return n.addSlot(name, slotAppend, nodes...)
-		}
-	}
-	return n
+	return n.addSlot(name, slotAppend, nodes...)
 }
 
 // PrependSlot adds nodes to the beginning of a named slot.
 func (n *Node) PrependSlot(name string, nodes ...*Node) *Node {
-	for _, node := range nodes {
-		if node != nil { // if at least one is not nil - add all
-			return n.addSlot(name, slotPrepend, nodes...)
-		}
-	}
-	return n
+	return n.addSlot(name, slotPrepend, nodes...)
 }
 
 const (
@@ -976,20 +970,41 @@ func (n *Node) addSlot(name string, op byte, nodes ...*Node) *Node {
 		if slot.group != nil {
 			switch op {
 			case slotReplace:
-				slot.group.Content(nodes...)
+				slot.group.Release()
+				n.slots[i].group = Join(nodes...)
 			case slotAppend:
 				slot.group.Append(nodes...)
 			case slotPrepend:
 				slot.group.Prepend(nodes...)
 			}
 		} else {
-			n.slots[i].group = Group(nodes...)
+			n.slots[i].group = Join(nodes...)
 		}
+		return n
+	}
+	if g := Join(nodes...); g != nil {
+		n.slots = append(n.slots, slotNode{
+			name:  name,
+			group: g,
+		})
+	}
+	return n
+}
+
+func (n *Node) assignSlot(name string, group *Node) *Node {
+	for i, slot := range n.slots {
+		if slot.name != name {
+			continue
+		}
+		if slot.group != nil {
+			slot.group.Release()
+		}
+		n.slots[i].group = group
 		return n
 	}
 	n.slots = append(n.slots, slotNode{
 		name:  name,
-		group: Group(nodes...),
+		group: group,
 	})
 	return n
 }
@@ -1026,52 +1041,60 @@ func (n *Node) ExtractSlotNodes(name string) []*Node {
 	return nil
 }
 
-// Count returns a number of non-nil content nodes.
-func (n *Node) Count() int {
-	if n == nil {
-		return 0
+const CountContent = 0 // counts direct children
+
+const (
+	CountWithRoot = 1 << iota // adds tree root to the node count
+	CountRecursive
+	CountSkipNil // excludes nil nodes from count
+)
+
+const CountTree = CountRecursive | CountWithRoot
+
+// Count returns a number of content nodes.
+// Flags can optionally modify the count behavior.
+func (n *Node) Count(flags ...int) int {
+	if n != nil {
+		mode := 0
+		for _, m := range flags {
+			mode |= m
+		}
+		return n.count(mode)
 	}
-	count := 0
+	return 0
+}
+
+func (n *Node) count(mode int) int {
+	count := mode & CountWithRoot
+
+	if mode&CountSkipNil == 0 {
+		count += len(n.content)
+		if mode&CountRecursive == 0 {
+			return count
+		}
+		mode &^= CountWithRoot
+		for _, x := range n.content {
+			if x != nil {
+				count += x.count(mode)
+			}
+		}
+		return count
+	}
+
+	if mode&CountRecursive == 0 {
+		for _, x := range n.content {
+			if x != nil {
+				count++
+			}
+		}
+		return count
+	}
+
+	mode |= CountWithRoot
 	for _, x := range n.content {
 		if x != nil {
-			count++
+			count += x.count(mode)
 		}
-	}
-	return count
-
-}
-
-// CountRecursive returns a total number of non-nil content nodes
-// in the node itself and its subtree.
-func (n *Node) CountRecursive() int {
-	if n == nil {
-		return 0
-	}
-	count := n.Count()
-	for _, x := range n.content {
-		count += x.CountRecursive()
-	}
-	return count
-}
-
-// CountExact returns a number of content nodes including nil nodes.
-func (n *Node) CountExact() int {
-	if n == nil {
-		return 0
-	}
-	return len(n.content)
-}
-
-// CountExactRecursive returns a total number of content nodes
-// in the node itself and its subtree.
-// CountExactRecursive counts all nodes including nil ones.
-func (n *Node) CountExactRecursive() int {
-	if n == nil {
-		return 0
-	}
-	count := n.CountExact()
-	for _, x := range n.content {
-		count += x.CountExactRecursive()
 	}
 	return count
 }
@@ -1115,9 +1138,9 @@ func (n *Node) MoveSlotTo(dst *Node, names ...string) *Node {
 				continue
 			}
 			if slot.group == nil {
-				continue
+				break
 			}
-			dst.Slot(name, slot.group)
+			dst.assignSlot(name, slot.group)
 			n.slots[i].group = nil
 			break
 		}
@@ -1294,11 +1317,29 @@ var jsonBufPool = sync.Pool{
 
 /**/
 
+const (
+	// RenderAssumeNoReplace skips duplicate checks for classes and attributes.
+	// This may speed up rendering of big class/attribute lists.
+	// In most cases this is not needed.
+	RenderAssumeNoReplace = 1 << iota
+)
+
 // Render writes the HTML representation of the node to w.
-func (n *Node) Render(w io.Writer) error {
+// Optional flags alter the rendering behavior.
+func (n *Node) Render(w io.Writer, flags ...int) error {
 	if n == nil {
 		return nil
 	}
+	mode := 0
+	for _, flag := range flags {
+		mode |= flag
+	}
+	return n.render(w, mode)
+}
+
+var errSafeScript = errors.New("script tags are not allowed to have content, use UnsafeScript to bypass this error")
+
+func (n *Node) render(w io.Writer, mode int) error {
 	if n.writeFn != nil {
 		return n.writeFn(n, w)
 	}
@@ -1316,12 +1357,12 @@ func (n *Node) Render(w io.Writer) error {
 		return err
 	}
 	if len(n.class.o) > 0 {
-		if err := writeClass(w, n.class.o); err != nil {
+		if err := writeClass(w, n.class.o, mode); err != nil {
 			return err
 		}
 	}
 	if len(n.attrs.o) > 0 {
-		if err := writeAttributes(w, n.attrs.o); err != nil {
+		if err := writeAttributes(w, n.attrs.o, mode); err != nil {
 			return err
 		}
 	}
@@ -1334,10 +1375,10 @@ func (n *Node) Render(w io.Writer) error {
 	}
 	if len(n.content) > 0 {
 		if (n.flag&flagScript == 0) && isScriptTag(n.tag) {
-			return fmt.Errorf("script tags are not allowed to have content, use UnsafeScript to bypass this error")
+			return errSafeScript
 		}
 		for _, content := range n.content {
-			if err := content.Render(w); err != nil {
+			if err := content.Render(w, mode); err != nil {
 				return err
 			}
 		}
@@ -1373,32 +1414,50 @@ var (
 	closingPartRight = []byte(">")
 )
 
-func writeClass(w io.Writer, classes []classEntry) error {
+func writeClass(w io.Writer, classes []classEntry, mode int) error {
 	if _, err := w.Write(classPrefix); err != nil {
 		return err
 	}
-	l := len(classes)
+	ln := len(classes)
 	first := true
-OUTER:
-	for i := 0; i < l; i++ {
-		c := classes[i]
-		if !c.active || !ValidClass(c.name) {
-			continue
-		}
-		for k := i + 1; k < l; k++ {
-			if classes[k].name == c.name {
-				continue OUTER
+	if mode&RenderAssumeNoReplace != 0 {
+		for i := 0; i < ln; i++ {
+			c := classes[i]
+			if !c.active || !ValidClass(c.name) {
+				continue
 			}
-		}
-		if !first {
-			if _, err := w.Write(space); err != nil {
+			if !first {
+				if _, err := w.Write(space); err != nil {
+					return err
+				}
+			}
+			if _, err := WriteString(w, c.name); err != nil {
 				return err
 			}
+			first = false
 		}
-		if _, err := WriteString(w, c.name); err != nil {
-			return err
+	} else {
+	OUTER:
+		for i := 0; i < ln; i++ {
+			c := classes[i]
+			if !c.active || !ValidClass(c.name) {
+				continue
+			}
+			for k := i + 1; k < ln; k++ {
+				if classes[k].name == c.name {
+					continue OUTER
+				}
+			}
+			if !first {
+				if _, err := w.Write(space); err != nil {
+					return err
+				}
+			}
+			if _, err := WriteString(w, c.name); err != nil {
+				return err
+			}
+			first = false
 		}
-		first = false
 	}
 
 	if _, err := w.Write(quote); err != nil {
@@ -1407,10 +1466,11 @@ OUTER:
 	return nil
 }
 
-func writeAttributes(w io.Writer, attrs []valueEntry) error {
-	l := len(attrs)
+func writeAttributes(w io.Writer, attrs []valueEntry, mode int) error {
+	ln := len(attrs)
+	checkDups := mode&RenderAssumeNoReplace == 0
 OUTER:
-	for i := 0; i < l; i++ {
+	for i := 0; i < ln; i++ {
 		a := attrs[i]
 		if !a.value.Valid() {
 			continue
@@ -1418,9 +1478,11 @@ OUTER:
 		if !ValidAttr(a.name) {
 			continue
 		}
-		for k := i + 1; k < l; k++ {
-			if attrs[k].name == a.name {
-				continue OUTER
+		if checkDups {
+			for k := i + 1; k < ln; k++ {
+				if attrs[k].name == a.name {
+					continue OUTER
+				}
 			}
 		}
 		kind := a.value.Kind()
@@ -2112,42 +2174,69 @@ func (cm *classMap) setOne(name string, active bool) {
 
 /**/
 
-// ValidTag checks if the string is a valid HTML tag name.
+var tagCharTable = [256]byte{
+	'a': 1, 'b': 1, 'c': 1, 'd': 1, 'e': 1, 'f': 1, 'g': 1, 'h': 1, 'i': 1, 'j': 1, 'k': 1, 'l': 1, 'm': 1,
+	'n': 1, 'o': 1, 'p': 1, 'q': 1, 'r': 1, 's': 1, 't': 1, 'u': 1, 'v': 1, 'w': 1, 'x': 1, 'y': 1, 'z': 1,
+	'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1, 'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1,
+	'N': 1, 'O': 1, 'P': 1, 'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1, 'Y': 1, 'Z': 1,
+	'0': 2, '1': 2, '2': 2, '3': 2, '4': 2, '5': 2, '6': 2, '7': 2, '8': 2, '9': 2,
+	'_': 2, '-': 2,
+}
+
 func ValidTag(tag string) bool {
 	if tag == "" {
 		return false
 	}
-	for _, c := range tag {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
-			continue
-		}
+	if tagCharTable[tag[0]] != 1 {
 		return false
 	}
-	if (tag[0] >= 'a' && tag[0] <= 'z') || (tag[0] >= 'A' && tag[0] <= 'Z') {
-		return true
-	}
-	return false
-}
-
-// ValidAttr checks if the string is a valid HTML attribute name.
-func ValidAttr(attr string) bool {
-	if attr == "" {
-		return false
-	}
-	for _, c := range attr {
-		if c == '"' || c == '<' || c == '>' || c == '#' || c == ' ' || c == '&' || c == '\'' || c == '\\' || c == '=' {
+	for i := 1; i < len(tag); i++ {
+		if tagCharTable[tag[i]] == 0 {
 			return false
 		}
-	}
-	if (attr[0] >= '0' && attr[0] <= '9') || attr[0] == '-' {
-		return false
 	}
 	return true
 }
 
-// ValidClass checks if the string is a valid CSS class name.
+var invalidAttrTable = [256]byte{
+	'"': 1, '<': 1, '>': 1, '#': 1, ' ': 1,
+	'&': 1, '\'': 1, '\\': 1, '=': 1,
+}
+
+func ValidAttr(attr string) bool {
+	n := len(attr)
+	if n == 0 {
+		return false
+	}
+	first := attr[0]
+	if (first >= '0' && first <= '9') || first == '-' {
+		return false
+	}
+	for i := 0; i < n; i++ {
+		if invalidAttrTable[attr[i]] != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+var invalidClassTable = [256]byte{
+	'"':  1,
+	'\'': 1,
+	// '<': 1, '>': 1, '&': 1,
+}
+
 func ValidClass(class string) bool {
-	return class != "" && !strings.ContainsAny(class, `"'`) // <>&`)
+	if class == "" {
+		return false
+	}
+	for i := 0; i < len(class); i++ {
+		if invalidClassTable[class[i]] != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 /**/
