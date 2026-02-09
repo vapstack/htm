@@ -128,6 +128,82 @@ func Test_Pool_GetReleaseCanReuse(t *testing.T) {
 	m.Release()
 }
 
+func Test_Clear_PreservesTagAndFlags(t *testing.T) {
+	customWrite := func(*Node, io.Writer) error { return nil }
+	n := Build("img").
+		Attr("id", "x").
+		Class("a").
+		Content(Text("x")).
+		Var("k", "v").
+		Slot("s", Text("slot")).
+		Postpone(func(*Node) {})
+
+	n.UnsafeScript()
+	n.SetWriteFn(customWrite)
+	n.value = String("payload")
+	tagBefore, voidBefore := n.GetTag()
+	flagBefore := n.flag
+
+	n.Clear()
+
+	tagAfter, voidAfter := n.GetTag()
+	if tagAfter != tagBefore || voidAfter != voidBefore {
+		t.Fatalf("clear must preserve tag/void flag: before=(%q,%v) after=(%q,%v)", tagBefore, voidBefore, tagAfter, voidAfter)
+	}
+	if n.flag != flagBefore {
+		t.Fatalf("clear must preserve flags: before=%08b after=%08b", flagBefore, n.flag)
+	}
+	if n.HasAttr("id") || n.HasClass("a") || n.HasContent() || n.HasVar("k") || n.HasSlot("s") {
+		t.Fatalf("clear must remove attrs/classes/content/vars/slots")
+	}
+	if len(n.postponed) != 0 {
+		t.Fatalf("clear must remove postponed mods")
+	}
+	if n.writeFn == nil {
+		t.Fatalf("clear must preserve write fn")
+	}
+	if !n.value.Valid() {
+		t.Fatalf("clear must not remove value")
+	}
+}
+
+func Test_Reset_RestoresPoolDefaults(t *testing.T) {
+	customWrite := func(*Node, io.Writer) error { return nil }
+	n := Build("img").
+		Attr("id", "x").
+		Class("a").
+		Content(Text("x")).
+		Var("k", "v").
+		Slot("s", Text("slot")).
+		Postpone(func(*Node) {})
+
+	n.UnsafeScript()
+	n.SetWriteFn(customWrite)
+	n.value = String("payload")
+
+	n.Reset()
+
+	tag, isVoid := n.GetTag()
+	if tag != "div" || isVoid {
+		t.Fatalf("reset must restore default tag, got (%q,%v)", tag, isVoid)
+	}
+	if n.flag != 0 {
+		t.Fatalf("reset must clear all non-owned flags, got %08b", n.flag)
+	}
+	if n.HasAttr("id") || n.HasClass("a") || n.HasContent() || n.HasVar("k") || n.HasSlot("s") {
+		t.Fatalf("reset must remove attrs/classes/content/vars/slots")
+	}
+	if len(n.postponed) != 0 {
+		t.Fatalf("reset must remove postponed mods")
+	}
+	if n.writeFn != nil {
+		t.Fatalf("reset must remove write fn")
+	}
+	if n.value.Valid() {
+		t.Fatalf("reset must remove value")
+	}
+}
+
 func Test_Static_CachesAndAvoidsReRender(t *testing.T) {
 	var calls int
 	fn := func() *Node {

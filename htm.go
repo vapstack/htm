@@ -1132,6 +1132,9 @@ func (n *Node) WithSlot(name string, fn func(n *Node, slot *Node)) {
 
 // MoveSlotTo moves named slots and their content to the destination node.
 func (n *Node) MoveSlotTo(dst *Node, names ...string) *Node {
+	if dst == n {
+		return n
+	}
 	for _, name := range names {
 		for i, slot := range n.slots {
 			if slot.name != name {
@@ -1196,7 +1199,7 @@ func (n *Node) Release() {
 	if !n.acquired.CompareAndSwap(true, false) {
 		panic("htm: attempt to release an already released node")
 	}
-	n.Clear()
+	n.Reset()
 	nodePool.Put(n)
 }
 
@@ -1726,67 +1729,32 @@ func Get() *Node {
 	return n
 }
 
-// var (
-// 	contentSliceThrown     atomic.Uint64
-// 	slotContentSliceThrown atomic.Uint64
-// 	slotSliceThrown        atomic.Uint64
-// 	varSliceThrown         atomic.Uint64
-// 	attachedSliceThrown    atomic.Uint64
-// )
-
-// Clear resets the node. All children are returned to the pool unless pooling is disabled.
-// Owned flag remains unchanged.
+// Clear clears node attributes, classes and contents.
+// All children are returned to the pool unless pooling is disabled.
+// Raw and Text nodes are unaffected by Clear.
 func (n *Node) Clear() {
-	n.tag = "div"
-	if n.flag&flagOwned != 0 {
-		n.flag = flagOwned
-	} else {
-		n.flag = 0
-	}
-	n.value = TypedValue{}
 
 	n.attrs.reset()
 	n.class.reset()
 
-	n.writeFn = nil
-
-	// if n.content == nil {
-	// 	// n.content = make([]*Node, 0, 16)
-	// } else
 	if len(n.content) > 0 {
 		for _, node := range n.content {
 			node.Release()
 		}
 		clear(n.content)
 		n.content = n.content[:0]
-		// if cap(n.content) > 128 {
-		// 	contentSliceThrown.Add(1)
-		// 	n.content = make([]*Node, 0, 64)
-		// }
 	}
 
 	if len(n.slots) > 0 {
 		for _, slot := range n.slots {
 			slot.group.Release()
-			// if cap(slot.content) > 128 {
-			// 	slotContentSliceThrown.Add(1)
-			// 	slot.content = make([]*Node, 0, 64)
-			// }
 		}
 		n.slots = n.slots[:0]
-		// if cap(n.slots) > 16 {
-		// 	slotSliceThrown.Add(1)
-		// 	n.slots = make([]slotNode, 0, 8)
-		// }
 	}
 
 	if len(n.vars) > 0 {
 		clear(n.vars)
 		n.vars = n.vars[:0]
-		// if cap(n.vars) > 32 {
-		// 	varSliceThrown.Add(1)
-		// 	n.vars = make([]valueEntry, 0, 16)
-		// }
 	}
 
 	if len(n.attached) > 0 {
@@ -1795,17 +1763,27 @@ func (n *Node) Clear() {
 		}
 		clear(n.attached)
 		n.attached = n.attached[:0]
-		// if cap(n.attached) > 64 {
-		// 	attachedSliceThrown.Add(1)
-		// 	n.attached = make([]*Node, 0, 32)
-		// }
 	}
 
 	if len(n.postponed) > 0 {
 		clear(n.postponed)
 		n.postponed = n.postponed[:0]
 	}
+}
 
+// Reset completely resets the node.
+// All children are returned to the pool unless pooling is disabled.
+// Owned flag remains unchanged.
+func (n *Node) Reset() {
+	n.tag = "div"
+	if n.flag&flagOwned != 0 {
+		n.flag = flagOwned
+	} else {
+		n.flag = 0
+	}
+	n.Clear()
+	n.writeFn = nil
+	n.value = TypedValue{}
 }
 
 /**/
