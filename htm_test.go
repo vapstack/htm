@@ -1047,7 +1047,7 @@ func makeBenchUsers(n int) []Item {
 	return users
 }
 
-func userCardSeq(items []Item) iter.Seq[*Node] {
+func userCardSeq(items []Item, doAllocs bool) iter.Seq[*Node] {
 	return func(yield func(*Node) bool) {
 		for i, item := range items {
 			role := "Member"
@@ -1064,7 +1064,12 @@ func userCardSeq(items []Item) iter.Seq[*Node] {
 				statusText = "Invited"
 			}
 
-			usage := strconv.Itoa(10 + (i % 80))
+			var usage string
+			if doAllocs {
+				usage = strconv.Itoa(10 + (i % 80))
+			} else {
+				usage = "80%"
+			}
 
 			card := Article().
 				Class("rounded-xl border bg-white p-4 shadow-sm").
@@ -1073,9 +1078,16 @@ func userCardSeq(items []Item) iter.Seq[*Node] {
 					Div().Class("flex items-start justify-between gap-3").Content(
 						Div().Class("min-w-0").Content(
 							Div().Class("truncate text-sm font-semibold").Text(item.Name),
-							A().Class("truncate text-xs text-gray-500 hover:text-blue-600").
-								Href("mailto:"+item.Email).
-								Text(item.Email),
+							If(doAllocs, func() *Node {
+								return A().Class("truncate text-xs text-gray-500 hover:text-blue-600").
+									Href("mailto:" + item.Email).
+									Text(item.Email)
+							}),
+							If(!doAllocs, func() *Node {
+								return A().Class("truncate text-xs text-gray-500 hover:text-blue-600").
+									Href(item.Email).
+									Text(item.Email)
+							}),
 						),
 						Span().Class(statusClass).Text(statusText),
 					),
@@ -1084,10 +1096,18 @@ func userCardSeq(items []Item) iter.Seq[*Node] {
 							Span().Class("text-gray-500").Text("Role"),
 							Span().Class("ml-1 font-medium text-gray-900").Text(role),
 						),
-						Div().Class("rounded-lg bg-gray-50 px-2 py-1 text-right").Content(
-							Span().Class("text-gray-500").Text("Usage"),
-							Span().Class("ml-1 font-medium text-gray-900").Text(usage+"%"),
-						),
+						If(doAllocs, func() *Node {
+							return Div().Class("rounded-lg bg-gray-50 px-2 py-1 text-right").Content(
+								Span().Class("text-gray-500").Text("Usage"),
+								Span().Class("ml-1 font-medium text-gray-900").Text(usage+"%"),
+							)
+						}),
+						If(!doAllocs, func() *Node {
+							return Div().Class("rounded-lg bg-gray-50 px-2 py-1 text-right").Content(
+								Span().Class("text-gray-500").Text("Usage"),
+								Span().Class("ml-1 font-medium text-gray-900").Text(usage),
+							)
+						}),
 					),
 				)
 
@@ -1099,7 +1119,7 @@ func userCardSeq(items []Item) iter.Seq[*Node] {
 	}
 }
 
-func buildContentSeqRealistic(items []Item) *Node {
+func buildContentSeqRealistic(items []Item, doAllocs bool) *Node {
 	return Section().
 		Class("rounded-2xl border bg-gray-50 p-6").
 		Content(
@@ -1108,23 +1128,53 @@ func buildContentSeqRealistic(items []Item) *Node {
 				Div().Class("text-sm text-gray-500").Text("Generated with ContentSeq and realistic card structure"),
 			),
 			Div().Class("grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3").
-				ContentSeq(userCardSeq(items)),
+				ContentSeq(userCardSeq(items, doAllocs)),
 		)
 }
 
-func Benchmark_ContentSeq_Realistic(b *testing.B) {
+func Benchmark_Build_ContentSeq(b *testing.B) {
 	items := makeBenchUsers(120)
-	cnt := buildContentSeqRealistic(items).Count()
+	cnt := buildContentSeqRealistic(items, true).Count()
 
-	buildContentSeqRealistic(items).Release() // warmup
+	b.Run("MoreAllocs", func(b *testing.B) {
+		buildContentSeqRealistic(items, true).Release() // warmup
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			n := buildContentSeqRealistic(items, true)
+			n.Release()
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+	b.Run("LessAllocs", func(b *testing.B) {
+		buildContentSeqRealistic(items, false).Release() // warmup
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			n := buildContentSeqRealistic(items, false)
+			n.Release()
+		}
+		b.StopTimer()
+		b.ReportMetric(float64(cnt), "nodes/op")
+	})
+}
+
+func Benchmark_Build_ContentSeq_Basic100(b *testing.B) {
+
+	Div().Release() // warmup
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for b.Loop() {
-		n := buildContentSeqRealistic(items)
+		n := Div().ContentSeq(func(yield func(*Node) bool) {
+			yield(Div())
+		})
 		n.Release()
 	}
-	b.StopTimer()
-	b.ReportMetric(float64(cnt), "nodes/op")
 }
