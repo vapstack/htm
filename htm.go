@@ -752,7 +752,7 @@ func Static(fn func() *Node) *Node {
 	return RawBytes(buf.Bytes())
 }
 
-// StaticContent sets the content of the node to the cached output of fn.
+// StaticContent sets (replaces) the content of the node to the cached output of fn.
 // Subsequent calls return a cached raw byte node, avoiding re-rendering.
 //
 // The cache key is the function pointer; closures are cached by function address
@@ -768,6 +768,17 @@ func Content(nodes ...*Node) Mod { return func(n *Node) { n.Content(nodes...) } 
 func (n *Node) Content(nodes ...*Node) *Node {
 	n.RemoveContent()
 	n.Append(nodes...)
+	return n
+}
+
+// ContentSeq sets (replaces) the content with nodes provided by the iterator.
+func (n *Node) ContentSeq(iter iter.Seq[*Node]) *Node {
+	n.RemoveContent()
+	for node := range iter {
+		if node != nil {
+			n.content = append(n.content, node)
+		}
+	}
 	return n
 }
 
@@ -831,6 +842,16 @@ func (n *Node) Append(nodes ...*Node) *Node {
 	return n
 }
 
+// AppendSeq adds nodes provided by the iterator to the end of content.
+func (n *Node) AppendSeq(iter iter.Seq[*Node]) *Node {
+	for node := range iter {
+		if node != nil {
+			n.content = append(n.content, node)
+		}
+	}
+	return n
+}
+
 // Prepend adds nodes to the beginning of the content.
 func (n *Node) Prepend(nodes ...*Node) *Node {
 	for _, node := range nodes {
@@ -838,6 +859,23 @@ func (n *Node) Prepend(nodes ...*Node) *Node {
 			n.content = slices.Insert(n.content, 0, nodes...)
 			return n
 		}
+	}
+	return n
+}
+
+// PrependSeq adds nodes provided by the iterator to the beginning of content.
+func (n *Node) PrependSeq(iter iter.Seq[*Node]) *Node {
+	g := Group()
+	defer g.Release()
+	for node := range iter {
+		if node != nil {
+			g.content = append(g.content, node)
+		}
+	}
+	if g.Len() > 0 {
+		n.content = slices.Insert(n.content, 0, g.content...)
+		clear(g.content)
+		g.content = g.content[:0]
 	}
 	return n
 }
@@ -864,6 +902,9 @@ func (n *Node) NoContent() bool {
 
 // RemoveContent clears the content and recursively releases all child nodes.
 func (n *Node) RemoveContent() *Node {
+	if len(n.content) == 0 {
+		return n
+	}
 	for _, x := range n.content {
 		x.Release()
 	}
@@ -941,9 +982,41 @@ func Slot(name string, nodes ...*Node) Mod {
 	return func(n *Node) { n.Slot(name, nodes...) }
 }
 
-// Slot sets the content of a named slot. If the slot exists, its content is replaced.
+// Slot sets (replaces) the content of a named slot.
+// If the slot exists, its content is replaced.
 func (n *Node) Slot(name string, nodes ...*Node) *Node {
 	return n.addSlot(name, slotReplace, nodes...)
+}
+
+// SlotSeq sets (replaces) the content of a named slot using the provided iterator.
+func (n *Node) SlotSeq(name string, iter iter.Seq[*Node]) *Node {
+	var g *Node
+	k := -1
+	for i, slot := range n.slots {
+		if slot.name != name {
+			continue
+		}
+		if slot.group != nil {
+			g = slot.group
+			g.RemoveContent()
+			n.slots[i].group = nil
+		}
+		k = i
+		break
+	}
+	if g == nil {
+		g = Group()
+	}
+	for node := range iter {
+		if node != nil {
+			g.content = append(g.content, node)
+		}
+	}
+	if g.Len() == 0 {
+		g.Release()
+		return n
+	}
+	return n.setSlot(k, name, g)
 }
 
 // AppendSlot adds nodes to the end of a named slot.
@@ -951,9 +1024,65 @@ func (n *Node) AppendSlot(name string, nodes ...*Node) *Node {
 	return n.addSlot(name, slotAppend, nodes...)
 }
 
+// AppendSlotSeq adds nodes to the end of a named slot.
+func (n *Node) AppendSlotSeq(name string, seq iter.Seq[*Node]) *Node {
+	var g *Node
+	k := -1
+	for i, slot := range n.slots {
+		if slot.name != name {
+			continue
+		}
+		if slot.group != nil {
+			g = slot.group
+			n.slots[i].group = nil
+		}
+		k = i
+		break
+	}
+	if g == nil {
+		g = Group()
+	}
+	for node := range seq {
+		if node != nil {
+			g.content = append(g.content, node)
+		}
+	}
+	if g.Len() == 0 {
+		g.Release()
+		return n
+	}
+	return n.setSlot(k, name, g)
+}
+
 // PrependSlot adds nodes to the beginning of a named slot.
 func (n *Node) PrependSlot(name string, nodes ...*Node) *Node {
 	return n.addSlot(name, slotPrepend, nodes...)
+}
+
+// PrependSlotSeq adds nodes to the beginning of a named slot.
+func (n *Node) PrependSlotSeq(name string, seq iter.Seq[*Node]) *Node {
+	var g *Node
+	k := -1
+	for i, slot := range n.slots {
+		if slot.name != name {
+			continue
+		}
+		if slot.group != nil {
+			g = slot.group
+			n.slots[i].group = nil
+		}
+		k = i
+		break
+	}
+	if g == nil {
+		g = Group()
+	}
+	g.PrependSeq(seq)
+	if g.Len() == 0 {
+		g.Release()
+		return n
+	}
+	return n.setSlot(k, name, g)
 }
 
 const (
@@ -1009,6 +1138,18 @@ func (n *Node) assignSlot(name string, group *Node) *Node {
 	return n
 }
 
+func (n *Node) setSlot(i int, name string, group *Node) *Node {
+	if i < 0 {
+		n.slots = append(n.slots, slotNode{
+			name:  name,
+			group: group,
+		})
+	} else {
+		n.slots[i].group = group
+	}
+	return n
+}
+
 // DeleteSlot removes specific named slots and releases their content.
 func (n *Node) DeleteSlot(names ...string) *Node {
 	for _, name := range names {
@@ -1041,59 +1182,24 @@ func (n *Node) ExtractSlotNodes(name string) []*Node {
 	return nil
 }
 
-const CountContent = 0 // counts direct children
-
-const (
-	CountWithRoot = 1 << iota // adds tree root to the node count
-	CountRecursive
-	CountSkipNil // excludes nil nodes from count
-)
-
-const CountTree = CountRecursive | CountWithRoot
-
-// Count returns a number of content nodes.
-// Flags can optionally modify the count behavior.
-func (n *Node) Count(flags ...int) int {
-	if n != nil {
-		mode := 0
-		for _, m := range flags {
-			mode |= m
-		}
-		return n.count(mode)
-	}
-	return 0
+// Len returns the number of content nodes.
+func (n *Node) Len() int {
+	return len(n.content)
 }
 
-func (n *Node) count(mode int) int {
-	count := mode & CountWithRoot
-
-	if mode&CountSkipNil == 0 {
-		count += len(n.content)
-		if mode&CountRecursive == 0 {
-			return count
-		}
-		mode &^= CountWithRoot
-		for _, x := range n.content {
-			if x != nil {
-				count += x.count(mode)
-			}
-		}
-		return count
+// Count returns the total number of nodes in the tree.
+func (n *Node) Count() int {
+	if n == nil {
+		return 0
 	}
+	return n.count() + 1
+}
 
-	if mode&CountRecursive == 0 {
-		for _, x := range n.content {
-			if x != nil {
-				count++
-			}
-		}
-		return count
-	}
-
-	mode |= CountWithRoot
+func (n *Node) count() int {
+	count := len(n.content)
 	for _, x := range n.content {
 		if x != nil {
-			count += x.count(mode)
+			count += x.count()
 		}
 	}
 	return count
@@ -1114,7 +1220,7 @@ func (n *Node) ExtractSlot(name string) *Node {
 }
 
 // WithSlot executes fn with the slot's content if the specified slot exists and has content.
-// Otherwise, fn is not called. Slot contents is removed before passing it to fn.
+// Otherwise, fn is not called. Slot content is removed before passing it to fn.
 func (n *Node) WithSlot(name string, fn func(n *Node, slot *Node)) {
 	for i, slot := range n.slots {
 		if slot.name != name {

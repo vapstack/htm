@@ -4,10 +4,21 @@ import (
 	"bytes"
 	"html/template"
 	"io"
+	"iter"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+func seqNodes(nodes ...*Node) iter.Seq[*Node] {
+	return func(yield func(*Node) bool) {
+		for _, node := range nodes {
+			if !yield(node) {
+				return
+			}
+		}
+	}
+}
 
 func Test_Render_BasicTagVoidAndNormal(t *testing.T) {
 
@@ -326,10 +337,74 @@ func Test_Slots_MoveSlotTo(t *testing.T) {
 	}
 }
 
+func Test_ContentSeq_AppendSeq_PrependSeq(t *testing.T) {
+	n := Div()
+	defer n.Release()
+
+	n.ContentSeq(seqNodes(Text("b"), Text("c")))
+	n.AppendSeq(seqNodes(Text("d")))
+	n.PrependSeq(seqNodes(Text("a")))
+
+	if got := n.String(); got != `<div>abcd</div>` {
+		t.Fatalf("unexpected content order: %q", got)
+	}
+	if got := n.Len(); got != 4 {
+		t.Fatalf("unexpected direct content count: %d", got)
+	}
+}
+
+func Test_Slots_SeqMethods(t *testing.T) {
+	n := Div()
+	defer n.Release()
+
+	n.Slot("x", Text("legacy"))
+	n.SlotSeq("x", seqNodes(Text("b"), Text("c")))
+	n.AppendSlotSeq("x", seqNodes(Text("d")))
+	n.PrependSlotSeq("x", seqNodes(Text("a")))
+
+	extracted := n.ExtractSlotNodes("x")
+	if len(extracted) != 4 {
+		t.Fatalf("unexpected slot node count: %d", len(extracted))
+	}
+	got := extracted[0].String() + extracted[1].String() + extracted[2].String() + extracted[3].String()
+	if got != "abcd" {
+		t.Fatalf("unexpected slot order: %q", got)
+	}
+	for _, node := range extracted {
+		node.Release()
+	}
+
+	n.Slot("x", Text("z"))
+	n.SlotSeq("x", seqNodes())
+	if n.HasSlot("x") {
+		t.Fatalf("expected slot x to be empty after replacing with empty seq")
+	}
+}
+
+func Test_CountAndLen(t *testing.T) {
+	n := Div().Content(
+		Text("a"),
+		Span().Text("b"),
+	)
+	defer n.Release()
+
+	if got := n.Len(); got != 2 {
+		t.Fatalf("unexpected len: %d", got)
+	}
+	if got := n.Count(); got != 4 {
+		t.Fatalf("unexpected tree count: %d", got)
+	}
+
+	var zero *Node
+	if got := zero.Count(); got != 0 {
+		t.Fatalf("nil node count must be zero, got %d", got)
+	}
+}
+
 /**/
 
 func Benchmark_Build(b *testing.B) {
-	cnt := buildBasic().Count(CountTree)
+	cnt := buildBasic().Count()
 
 	buildBasic().Release() // warmup
 
@@ -358,7 +433,7 @@ func Benchmark_Build_Mods(b *testing.B) {
 		))
 	}
 
-	cnt := build().Count(CountTree)
+	cnt := build().Count()
 
 	build().Release() // warmup
 
@@ -374,7 +449,7 @@ func Benchmark_Build_Mods(b *testing.B) {
 
 func Benchmark_Render(b *testing.B) {
 	n := buildBasic()
-	cnt := n.Count(CountTree)
+	cnt := n.Count()
 
 	b.Run("Default", func(b *testing.B) {
 		b.ReportAllocs()
@@ -413,7 +488,7 @@ func Benchmark_Render_Mods(b *testing.B) {
 		),
 	)
 
-	cnt := n.Count(CountTree)
+	cnt := n.Count()
 
 	b.Run("Default", func(b *testing.B) {
 		b.ReportAllocs()
@@ -451,7 +526,7 @@ func Benchmark_BuildRender(b *testing.B) {
 		)
 	}
 
-	cnt := build().Count(CountTree)
+	cnt := build().Count()
 
 	build().Release() // warmup
 
@@ -501,7 +576,7 @@ func Benchmark_BuildRender_Mods(b *testing.B) {
 		)
 	}
 
-	cnt := build().Count(CountTree)
+	cnt := build().Count()
 
 	build().Release() // warmup
 
@@ -621,7 +696,7 @@ func buildCompareChaining() *Node {
 }
 
 func Benchmark_Compare_Htm(b *testing.B) {
-	cnt := buildCompareChaining().Count(CountTree)
+	cnt := buildCompareChaining().Count()
 
 	buildCompareChaining().Release() // warmup
 
@@ -650,7 +725,7 @@ func Benchmark_Compare_Htm_Mods(b *testing.B) {
 		}
 		return list
 	}
-	cnt := build().Count(CountTree)
+	cnt := build().Count()
 
 	build().Release() // warmup
 
@@ -672,7 +747,7 @@ func Benchmark_Compare_StdTemplate(b *testing.B) {
 	const tplString = `<ul class="user-list">{{range .}}<li class="user-item" id="{{.ID}}"><span class="name">{{.Name}}</span><a href="mailto:{{.Email}}">{{.Email}}</a></li>{{end}}</ul>`
 	tpl := template.Must(template.New("list").Parse(tplString))
 
-	cnt := buildCompareChaining().Count(CountTree)
+	cnt := buildCompareChaining().Count()
 
 	_ = tpl.Execute(io.Discard, benchData) // warmup?
 
@@ -740,8 +815,6 @@ func Benchmark_Compare_RawString(b *testing.B) {
 	b.StopTimer()
 	b.ReportMetric(float64(5*len(benchData)+1), "nodes/op")
 }
-
-/**/
 
 func buildBenchPage() *Node {
 	const rows = 100
@@ -864,7 +937,7 @@ func buildRows(rows int) *Node {
 }
 
 func Benchmark_Page_Build(b *testing.B) {
-	cnt := buildBenchPage().Count(CountTree)
+	cnt := buildBenchPage().Count()
 
 	buildBenchPage().Release() // warmup
 
@@ -884,7 +957,7 @@ func Benchmark_Page_Render(b *testing.B) {
 
 	n := buildBenchPage()
 
-	cnt := n.Count(CountTree)
+	cnt := n.Count()
 
 	b.Run("Default", func(b *testing.B) {
 		b.ReportAllocs()
@@ -916,7 +989,7 @@ func Benchmark_Page_Render(b *testing.B) {
 
 func Benchmark_Page_BuildRender(b *testing.B) {
 
-	cnt := buildBenchPage().Count(CountTree)
+	cnt := buildBenchPage().Count()
 
 	buildBenchPage().Release() // warmup
 
@@ -952,43 +1025,106 @@ func Benchmark_Page_BuildRender(b *testing.B) {
 }
 
 func Benchmark_Count(b *testing.B) {
-
 	n := buildBenchPage()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		n.Count()
+	}
+}
 
-	b.Run("CountContent", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for b.Loop() {
-			n.Count()
+func makeBenchUsers(n int) []Item {
+	users := make([]Item, 0, n)
+	for i := 0; i < n; i++ {
+		id := i + 1
+		base := benchData[i%len(benchData)]
+		users = append(users, Item{
+			ID:    id,
+			Name:  base.Name + " " + strconv.Itoa(id),
+			Email: "user" + strconv.Itoa(id) + "@example.com",
+		})
+	}
+	return users
+}
+
+func userCardSeq(items []Item) iter.Seq[*Node] {
+	return func(yield func(*Node) bool) {
+		for i, item := range items {
+			role := "Member"
+			if i%5 == 0 {
+				role = "Admin"
+			} else if i%3 == 0 {
+				role = "Editor"
+			}
+
+			statusClass := "inline-flex items-center rounded-full bg-green-50 text-green-700 px-2 py-1 text-xs"
+			statusText := "Active"
+			if i%7 == 0 {
+				statusClass = "inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-1 text-xs"
+				statusText = "Invited"
+			}
+
+			usage := strconv.Itoa(10 + (i % 80))
+
+			card := Article().
+				Class("rounded-xl border bg-white p-4 shadow-sm").
+				AttrValue("data-user-id", Int(item.ID)).
+				Content(
+					Div().Class("flex items-start justify-between gap-3").Content(
+						Div().Class("min-w-0").Content(
+							Div().Class("truncate text-sm font-semibold").Text(item.Name),
+							A().Class("truncate text-xs text-gray-500 hover:text-blue-600").
+								Href("mailto:"+item.Email).
+								Text(item.Email),
+						),
+						Span().Class(statusClass).Text(statusText),
+					),
+					Div().Class("mt-3 grid grid-cols-2 gap-2 text-xs").Content(
+						Div().Class("rounded-lg bg-gray-50 px-2 py-1").Content(
+							Span().Class("text-gray-500").Text("Role"),
+							Span().Class("ml-1 font-medium text-gray-900").Text(role),
+						),
+						Div().Class("rounded-lg bg-gray-50 px-2 py-1 text-right").Content(
+							Span().Class("text-gray-500").Text("Usage"),
+							Span().Class("ml-1 font-medium text-gray-900").Text(usage+"%"),
+						),
+					),
+				)
+
+			if !yield(card) {
+				card.Release()
+				return
+			}
 		}
-		b.StopTimer()
-	})
+	}
+}
 
-	b.Run("CountRecursive", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for b.Loop() {
-			n.Count(CountRecursive)
-		}
-		b.StopTimer()
-	})
+func buildContentSeqRealistic(items []Item) *Node {
+	return Section().
+		Class("rounded-2xl border bg-gray-50 p-6").
+		Content(
+			Div().Class("mb-4").Content(
+				Div().Class("text-base font-semibold").Text("Team members"),
+				Div().Class("text-sm text-gray-500").Text("Generated with ContentSeq and realistic card structure"),
+			),
+			Div().Class("grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3").
+				ContentSeq(userCardSeq(items)),
+		)
+}
 
-	b.Run("CountTree", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for b.Loop() {
-			n.Count(CountTree)
-		}
-		b.StopTimer()
-	})
+func Benchmark_ContentSeq_Realistic(b *testing.B) {
+	items := makeBenchUsers(120)
+	cnt := buildContentSeqRealistic(items).Count()
 
-	b.Run("CountTreeNonNil", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for b.Loop() {
-			n.Count(CountTree | CountSkipNil)
-		}
-		b.StopTimer()
-	})
+	buildContentSeqRealistic(items).Release() // warmup
 
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		n := buildContentSeqRealistic(items)
+		n.Release()
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(cnt), "nodes/op")
 }
