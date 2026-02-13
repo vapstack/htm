@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A demo page that resembles a real one. Suitable for HTML parser benchmarks.">
+    <meta name="theme-color" content="#0b5fff">
+    <meta name="robots" content="noindex,nofollow">
+    <meta property="og:title" content="Catalog: smart bulbs">
+    <meta property="og:description" content="Sample page with typical blocks, forms, tables, and data-* attributes.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_US">
+    <link rel="preconnect" href="https://example.com" crossorigin>
+    <link rel="dns-prefetch" href="//cdn.example.com">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="canonical" href="https://example.com/catalog/smart-bulbs">
+
+    <title>Catalog · Smart Bulbs — Demo Shop</title>
+
+    <style>
+		:root { color-scheme: light dark; --bg:#0b1220; --fg:#e7eefc; --muted:#94a3b8; --card:#121a2b; --accent:#0b5fff; }
+		body { margin:0; font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#f6f8fb; color:#0f172a; }
+		header, main, footer { max-width: 1100px; margin: 0 auto; padding: 16px; }
+		.topbar { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+		.logo { display:flex; gap:10px; align-items:center; text-decoration:none; color:inherit; }
+		.logo-badge { width:34px; height:34px; border-radius:10px; background:var(--accent); display:inline-block; }
+		nav ul { list-style:none; margin:0; padding:0; display:flex; gap:10px; flex-wrap:wrap; }
+		nav a { text-decoration:none; color:#334155; padding:8px 10px; border-radius:10px; }
+		nav a[aria-current="page"] { background:#e2e8f0; color:#0f172a; }
+		.search { display:flex; gap:8px; align-items:center; flex:1; max-width:520px; }
+		.search input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:12px; }
+		.btn { cursor:pointer; padding:10px 12px; border-radius:12px; border:1px solid #cbd5e1; background:#fff; }
+		.btn-primary { background:var(--accent); color:#fff; border-color:transparent; }
+		.grid { display:grid; grid-template-columns: 280px 1fr; gap:16px; align-items:start; }
+		.card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:14px; box-shadow: 0 1px 1px rgba(15,23,42,.05); }
+		.card h2, .card h3 { margin: 0 0 10px; }
+		.muted { color:#64748b; }
+		.pill { display:inline-flex; gap:6px; align-items:center; padding:4px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:12px; }
+		.products { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:14px; }
+		.product { display:flex; flex-direction:column; gap:10px; height:100%; }
+		.product img { width:100%; height:140px; object-fit:cover; border-radius:12px; background:#e2e8f0; }
+		.price { font-weight:700; }
+		.row { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+		.tags { display:flex; gap:6px; flex-wrap:wrap; }
+		.tag { font-size:12px; background:#f1f5f9; color:#334155; padding:3px 8px; border-radius:999px; }
+		.form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+		fieldset { border:1px solid #e2e8f0; border-radius:14px; padding:12px; }
+		legend { padding:0 6px; color:#334155; }
+		label { display:block; font-size:13px; color:#334155; margin-bottom:4px; }
+		select, input[type="number"], input[type="email"], textarea { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:12px; }
+		textarea { min-height:90px; resize:vertical; }
+		table { width:100%; border-collapse:collapse; font-size:14px; }
+		th, td { padding:10px 8px; border-bottom:1px solid #e2e8f0; text-align:left; vertical-align:top; }
+		th { color:#334155; font-weight:600; }
+		details { border:1px solid #e2e8f0; border-radius:14px; padding:10px 12px; }
+		details + details { margin-top:10px; }
+		summary { cursor:pointer; font-weight:600; }
+		.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+
+		@media (max-width: 980px) {
+			.grid { grid-template-columns: 1fr; }
+			.products { grid-template-columns: repeat(2, minmax(0,1fr)); }
+			.search { max-width:none; }
+		}
+		@media (max-width: 600px) {
+			.products { grid-template-columns: 1fr; }
+			.form-grid { grid-template-columns: 1fr; }
+		}
+
+		@media (prefers-color-scheme: dark) {
+			body { background: var(--bg); color: var(--fg); }
+			.card { background: var(--card); border-color: rgba(148,163,184,.2); }
+			nav a { color: var(--fg); }
+			nav a[aria-current="page"] { background: rgba(148,163,184,.15); }
+			.btn { background: rgba(255,255,255,.06); color: var(--fg); border-color: rgba(148,163,184,.25); }
+			.search input, select, input[type="number"], input[type="email"], textarea { background: rgba(255,255,255,.06); color: var(--fg); border-color: rgba(148,163,184,.25); }
+			th, td { border-bottom-color: rgba(148,163,184,.2); }
+			.muted { color: var(--muted); }
+			.tag { background: rgba(148,163,184,.12); color: var(--fg); }
+			.pill { background: rgba(11,95,255,.18); color: #bcd5ff; }
+			details { border-color: rgba(148,163,184,.2); }
+		}
+    </style>
+    <!-- comment text -->
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            "name": "Smart bulbs",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "url": "https://example.com/p/aurora-e27"},
+                {"@type": "ListItem", "position": 2, "url": "https://example.com/p/nova-gu10"},
+                {"@type": "ListItem", "position": 3, "url": "https://example.com/p/lumen-strip"}
+            ]
+        }
+    </script>
+</head>
+<!-- comment text -->
+<body data-app="demo-shop" data-locale="en-US" data-build="2026.02.12" class="page page--catalog">
+<a class="sr-only" href="#content">Skip to content</a>
+<!-- comment text -->
+<header role="banner" class="site-header" data-testid="header">
+    <div class="topbar">
+        <a class="logo" href="/" aria-label="Demo Shop — home" data-track="logo">
+            <span class="logo-badge" aria-hidden="true"></span>
+            <span>
+                <strong>Demo Shop</strong><br>
+                <span class="muted" style="font-size:12px;">device catalog</span>
+            </span>
+        </a>
+        <!-- comment text -->
+        <form class="search" role="search" action="/search" method="get" data-track="search" autocomplete="off">
+            <label for="q" class="sr-only">Search products</label>
+            <input id="q" name="q" type="search" placeholder="Search: bulb, strip, switch…" inputmode="search"
+                   aria-label="Search" data-analytics-id="search-input" minlength="2" maxlength="64">
+            <button class="btn btn-primary" type="submit" aria-label="Search" data-analytics-id="search-submit">Search</button>
+        </form>
+        <!-- comment text -->
+        <div class="row" aria-label="User panel">
+            <button class="btn" type="button" aria-haspopup="dialog" aria-controls="loginDialog"
+                    data-action="open-login" data-analytics-id="login">
+                Sign in
+            </button>
+            <a class="btn" href="/cart" aria-label="Cart" data-track="cart">
+                Cart <span class="pill" aria-label="2 items in cart" data-cart-count="2">2</span>
+            </a>
+        </div>
+    </div>
+    <!-- comment text -->
+    <nav aria-label="Main navigation" data-testid="nav">
+        <ul>
+            <li><a href="/catalog" aria-current="page" data-nav="catalog">Catalog</a></li>
+            <li><a href="/deals" data-nav="deals">Deals</a></li>
+            <li><a href="/support" data-nav="support">Support</a></li>
+            <li><a href="/about" rel="nofollow" data-nav="about">About</a></li>
+        </ul>
+    </nav>
+    <!-- comment text -->
+    <div class="card" style="margin-top:12px;" data-component="breadcrumbs">
+        <nav aria-label="Breadcrumbs">
+            <ol style="margin:0; padding-left:18px;">
+                <li><a href="/" data-bc="home">Home</a></li>
+                <li><a href="/catalog" data-bc="catalog">Catalog</a></li>
+                <li aria-current="page">Smart bulbs</li>
+            </ol>
+        </nav>
+        <div class="row" style="margin-top:10px;">
+            <div>
+                <h1 style="margin:0;">Smart bulbs</h1>
+                <p class="muted" style="margin:4px 0 0;">
+                    3 products · delivery in 1-2 days · <span class="pill" title="Updated recently" data-last-updated="2026-02-12T09:15:00Z">updated</span>
+                </p>
+            </div>
+            <div class="tags" aria-label="Quick filters">
+                <a class="tag" href="?wifi=1" data-filter="wifi">Wi-Fi</a>
+                <a class="tag" href="?zigbee=1" data-filter="zigbee">Zigbee</a>
+                <a class="tag" href="?dimmable=1" data-filter="dimmable">Dimming</a>
+                <a class="tag" href="?white=1" data-filter="white">White light</a>
+                <a class="tag" href="?rgb=1" data-filter="rgb">RGB</a>
+            </div>
+        </div>
+    </div>
+</header>
+<!-- comment text -->
+<main id="content" role="main" class="site-main" data-testid="content">
+    <div class="grid">
+        <aside class="card" aria-label="Filters" data-component="filters">
+            <h2>Filters</h2>
+            <!-- comment text -->
+            <form action="/catalog/smart-bulbs" method="get" data-form="filters" novalidate>
+                <fieldset>
+                    <legend>Price</legend>
+                    <div class="form-grid">
+                        <div>
+                            <label for="minPrice">From, €</label>
+                            <input id="minPrice" name="min" type="number" min="0" step="1" placeholder="0" value="9"
+                                   inputmode="numeric" data-filter-field="minPrice">
+                        </div>
+                        <div>
+                            <label for="maxPrice">To, €</label>
+                            <input id="maxPrice" name="max" type="number" min="0" step="1" placeholder="200" value="79"
+                                   inputmode="numeric" data-filter-field="maxPrice">
+                        </div>
+                    </div>
+                </fieldset>
+                <!-- comment text -->
+                <fieldset style="margin-top:10px;">
+                    <legend>Base</legend>
+                    <div>
+                        <input id="base-e27" name="base" type="checkbox" value="e27" checked data-filter="base">
+                        <label for="base-e27" style="display:inline; margin-left:6px;">E27</label>
+                    </div>
+                    <div>
+                        <input id="base-gu10" name="base" type="checkbox" value="gu10" data-filter="base">
+                        <label for="base-gu10" style="display:inline; margin-left:6px;">GU10</label>
+                    </div>
+                </fieldset>
+                <!-- comment text -->
+                <fieldset style="margin-top:10px;">
+                    <legend>Sort</legend>
+                    <label for="sort" class="sr-only">Sort</label>
+                    <select id="sort" name="sort" data-filter-field="sort">
+                        <option value="popular" selected>Most popular first</option>
+                        <option value="price_asc">Price: low to high</option>
+                        <option value="price_desc">Price: high to low</option>
+                        <option value="new">Newest first</option>
+                        <option value="rating">By rating</option>
+                    </select>
+                </fieldset>
+                <!-- comment text -->
+                <div class="row" style="margin-top:12px;">
+                    <button class="btn btn-primary" type="submit" data-action="apply-filters">Apply</button>
+                    <button class="btn" type="reset" data-action="reset-filters">Reset</button>
+                </div>
+                <!-- comment text -->
+                <input type="hidden" name="utm_source" value="benchmark">
+                <input type="hidden" name="utm_medium" value="html">
+            </form>
+            <!-- comment text -->
+            <hr style="border:none; border-top:1px solid rgba(148,163,184,.25); margin:14px 0;">
+            <!-- comment text -->
+            <details open data-component="faq">
+                <summary>How to choose a bulb?</summary>
+                <p class="muted" style="margin:8px 0 0;">
+                    Focus on base type, protocol (Wi-Fi/Zigbee), brightness (lumens), and scene support.
+                </p>
+            </details>
+            <details data-component="faq">
+                <summary>Returns and warranty</summary>
+                <p class="muted" style="margin:8px 0 0;">
+                    Returns are accepted within 14 days. Manufacturer warranty is 12-24 months depending on the model.
+                </p>
+            </details>
+        </aside>
+        <!-- comment text -->
+        <section aria-label="Product list" data-component="product-list">
+            <div class="products">
+                <article class="card product" itemscope itemtype="https://schema.org/Product"
+                         data-product-id="aurora-e27" data-sku="AUR-E27-9W" data-analytics-product="1">
+                    <a href="/p/aurora-e27" itemprop="url" data-track="product-open">
+                        <img src="https://images.unsplash.com/photo-1518442618152-6d7d63f2aaeb?auto=format&fit=crop&w=900&q=60"
+                             alt="Aurora E27 bulb on a wooden table" loading="lazy" decoding="async"
+                             referrerpolicy="no-referrer" itemprop="image">
+                    </a>
+                    <div class="row">
+                        <h3 style="margin:0;" itemprop="name">Aurora E27</h3>
+                        <span class="pill" title="Best seller" data-badge="bestseller">hot</span>
+                    </div>
+                    <p class="muted" style="margin:0;" itemprop="description">
+                        9W Wi-Fi bulb, warm/cool white, dimming, schedules.
+                    </p>
+                    <div class="tags" aria-label="Specs">
+                        <span class="tag" data-spec="base">E27</span>
+                        <span class="tag" data-spec="protocol">Wi-Fi</span>
+                        <span class="tag" data-spec="temp">2700–6500K</span>
+                        <span class="tag" data-spec="power">9W</span>
+                    </div>
+                    <!-- comment text -->
+                    <div class="row" style="margin-top:auto;">
+                        <div>
+                            <div class="price" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                                <meta itemprop="priceCurrency" content="EUR">
+                                <span itemprop="price" content="19.90">€19.90</span>
+                                <link itemprop="availability" href="https://schema.org/InStock">
+                            </div>
+                            <div class="muted" style="font-size:12px;" data-stock="in">In stock · delivery tomorrow</div>
+                        </div>
+                        <button class="btn btn-primary" type="button"
+                                data-action="add-to-cart" data-product="aurora-e27" aria-label="Add Aurora E27 to cart">
+                            Add to cart
+                        </button>
+                    </div>
+                </article>
+                <!-- comment text -->
+                <article class="card product" itemscope itemtype="https://schema.org/Product"
+                         data-product-id="nova-gu10" data-sku="NOV-GU10-6W" data-analytics-product="2">
+                    <a href="/p/nova-gu10" itemprop="url" data-track="product-open">
+                        <img src="https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=60"
+                             alt="Spotlight with GU10 bulb" loading="lazy" decoding="async"
+                             referrerpolicy="no-referrer" itemprop="image">
+                    </a>
+                    <div class="row">
+                        <h3 style="margin:0;" itemprop="name">Nova GU10</h3>
+                        <span class="pill" title="New" data-badge="new">new</span>
+                    </div>
+                    <p class="muted" style="margin:0;" itemprop="description">
+                        Zigbee bulb for spots, hub compatible, stable in large networks.
+                    </p>
+                    <div class="tags" aria-label="Specs">
+                        <span class="tag" data-spec="base">GU10</span>
+                        <span class="tag" data-spec="protocol">Zigbee</span>
+                        <span class="tag" data-spec="temp">3000K</span>
+                        <span class="tag" data-spec="power">6W</span>
+                    </div>
+                    <!-- comment text -->
+                    <div class="row" style="margin-top:auto;">
+                        <div>
+                            <div class="price" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                                <meta itemprop="priceCurrency" content="EUR">
+                                <span itemprop="price" content="24.50">€24.50</span>
+                                <link itemprop="availability" href="https://schema.org/LimitedAvailability">
+                            </div>
+                            <div class="muted" style="font-size:12px;" data-stock="low">Low stock</div>
+                        </div>
+                        <button class="btn btn-primary" type="button"
+                                data-action="add-to-cart" data-product="nova-gu10" aria-label="Add Nova GU10 to cart">
+                            Add to cart
+                        </button>
+                    </div>
+                </article>
+                <!-- comment text -->
+                <article class="card product" itemscope itemtype="https://schema.org/Product"
+                         data-product-id="lumen-strip" data-sku="LUM-STRIP-2M" data-analytics-product="3">
+                    <a href="/p/lumen-strip" itemprop="url" data-track="product-open">
+                        <img src="https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=900&q=60"
+                             alt="LED strip on a reel" loading="lazy" decoding="async"
+                             referrerpolicy="no-referrer" itemprop="image">
+                    </a>
+                    <div class="row">
+                        <h3 style="margin:0;" itemprop="name">Lumen Strip 2m</h3>
+                        <span class="pill" title="15% off" data-badge="sale">-15%</span>
+                    </div>
+                    <p class="muted" style="margin:0;" itemprop="description">
+                        2-meter RGB strip, effects, scenes, music sync (via app).
+                    </p>
+                    <div class="tags" aria-label="Specs">
+                        <span class="tag" data-spec="type">LED strip</span>
+                        <span class="tag" data-spec="protocol">Wi-Fi</span>
+                        <span class="tag" data-spec="rgb">RGB</span>
+                        <span class="tag" data-spec="length">2m</span>
+                    </div>
+
+                    <div class="row" style="margin-top:auto;">
+                        <div>
+                            <div class="price" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                                <meta itemprop="priceCurrency" content="EUR">
+                                <span class="price" aria-label="Discounted price">€29.00</span>
+                                <span class="muted" style="text-decoration:line-through; margin-left:6px;" aria-label="Old price">€34.00</span>
+                                <meta itemprop="price" content="29.00">
+                                <link itemprop="availability" href="https://schema.org/InStock">
+                            </div>
+                            <div class="muted" style="font-size:12px;" data-stock="in">In stock · pickup today</div>
+                        </div>
+                        <button class="btn btn-primary" type="button"
+                                data-action="add-to-cart" data-product="lumen-strip" aria-label="Add Lumen Strip 2m to cart">
+                            Add to cart
+                        </button>
+                    </div>
+                </article>
+            </div>
+            <!-- comment text -->
+            <div class="card" style="margin-top:14px;" data-component="comparison">
+                <h2>Comparison</h2>
+                <p class="muted" style="margin-top:-6px;">Table with typical cells, abbreviations, and notes.</p>
+
+                <table aria-label="Product comparison" data-table="product-comparison">
+                    <thead>
+                    <tr>
+                        <th scope="col">Model</th>
+                        <th scope="col">Protocol</th>
+                        <th scope="col">Brightness</th>
+                        <th scope="col">Base</th>
+                        <th scope="col">Features</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td><a href="/p/aurora-e27" data-link="cmp-aurora">Aurora E27</a></td>
+                        <td>Wi-Fi</td>
+                        <td>800 lm</td>
+                        <td>E27</td>
+                        <td>
+                            Dimming, schedules<br>
+                            <small class="muted" data-note="1">* requires 2.4GHz</small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><a href="/p/nova-gu10" data-link="cmp-nova">Nova GU10</a></td>
+                        <td>Zigbee</td>
+                        <td>450 lm</td>
+                        <td>GU10</td>
+                        <td>
+                            Stable mesh network<br>
+                            <small class="muted" data-note="2">* hub required</small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><a href="/p/lumen-strip" data-link="cmp-lumen">Lumen Strip 2m</a></td>
+                        <td>Wi-Fi</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>
+                            RGB, effects, scenes<br>
+                            <small class="muted" data-note="3">* power supply included</small>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- comment text -->
+            <div class="card" style="margin-top:14px;" data-component="feedback">
+                <h2>Feedback</h2>
+                <p class="muted" style="margin-top:-6px;">The form intentionally includes different field types and attributes.</p>
+
+                <form action="/feedback" method="post" enctype="multipart/form-data" data-form="feedback">
+                    <input type="hidden" name="csrf" value="b0e1b9e6-8e44-4a0a-9a3c-2dd3c018f8b4">
+                    <div class="form-grid">
+                        <div>
+                            <label for="email">Email</label>
+                            <input id="email" name="email" type="email" autocomplete="email" placeholder="name@example.com"
+                                   required aria-required="true" data-field="email">
+                        </div>
+                        <div>
+                            <label for="topic">Topic</label>
+                            <select id="topic" name="topic" required data-field="topic">
+                                <option value="" selected disabled>Choose…</option>
+                                <option value="question">Product question</option>
+                                <option value="delivery">Delivery</option>
+                                <option value="return">Return</option>
+                                <option value="bug">Website bug</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                        <label for="message">Message</label>
+                        <textarea id="message" name="message" maxlength="500" placeholder="Briefly describe the issue…"
+                                  data-field="message"></textarea>
+                    </div>
+
+                    <div class="row" style="margin-top:12px;">
+                        <label style="display:flex; gap:8px; align-items:center; margin:0;">
+                            <input type="checkbox" name="consent" value="1" checked data-field="consent">
+                            <span class="muted">I agree to data processing</span>
+                        </label>
+
+                        <button class="btn btn-primary" type="submit" data-action="send-feedback">Send</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+<!-- comment text -->
+<footer role="contentinfo" class="site-footer" data-testid="footer">
+    <div class="card" data-component="footer">
+        <div class="row" style="align-items:flex-start;">
+            <div>
+                <strong>Demo Shop</strong>
+                <p class="muted" style="margin:6px 0 0;">
+                    This is a demo page for HTML parsing tests.
+                    <br>
+                    <small>© <time datetime="2026-02-12">2026</time></small>
+                </p>
+            </div>
+
+            <div style="min-width: 280px;">
+                <p style="margin:0 0 6px;"><strong>Contacts</strong></p>
+                <address class="muted" style="font-style:normal;">
+                    support@example.com<br>
+                    <a href="tel:+31201234567" class="muted" data-track="phone">+31 20 123 4567</a>
+                </address>
+            </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid rgba(148,163,184,.25); margin:14px 0;">
+
+        <div class="row">
+            <small class="muted">
+                <a href="/privacy" rel="nofollow" class="muted" data-link="privacy">Privacy</a>
+                ·
+                <a href="/terms" rel="nofollow" class="muted" data-link="terms">Terms</a>
+                ·
+                <a href="/status" class="muted" data-link="status">Status</a>
+            </small>
+
+            <small class="muted">
+                <span data-env="prod" hidden>prod</span>
+                <span data-feature-flags="filters_v2,cmp_table,ab_search" aria-label="Feature flags">flags: filters_v2, cmp_table, ab_search</span>
+            </small>
+        </div>
+    </div>
+</footer>
+<!-- comment text -->
+<dialog id="loginDialog" aria-labelledby="loginTitle" data-component="dialog">
+    <form method="dialog" class="card" style="max-width:420px; margin:10vh auto;">
+        <h2 id="loginTitle" style="margin-top:0;">Sign in</h2>
+        <p class="muted" style="margin-top:-6px;">The dialog is included to diversify the DOM structure.</p>
+        <div>
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" name="loginEmail" type="email" autocomplete="username" placeholder="name@example.com">
+        </div>
+        <div style="margin-top:10px;">
+            <label for="loginPass">Password</label>
+            <input id="loginPass" name="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <div class="row" style="margin-top:12px;">
+            <button class="btn" value="cancel">Cancel</button>
+            <button class="btn btn-primary" value="ok" data-action="login">Sign in</button>
+        </div>
+    </form>
+</dialog>
+<!-- comment text -->
+<script>
+	(function () {
+		const byId = (id) => document.getElementById(id);
+
+		// Demo handlers: intentionally minimal and non-blocking.
+		document.addEventListener("click", (e) => {
+			const btn = e.target.closest("[data-action]");
+			if (!btn) return;
+
+			const action = btn.getAttribute("data-action");
+			if (action === "open-login") {
+				const dlg = byId("loginDialog");
+				if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+			}
+
+			if (action === "add-to-cart") {
+				const product = btn.getAttribute("data-product") || "unknown";
+				btn.disabled = true;
+				btn.textContent = "Added";
+				btn.setAttribute("aria-disabled", "true");
+				console.log("[demo] add-to-cart:", product);
+			}
+		}, { passive: true });
+
+		// A tiny example of reading data-* attributes.
+		const root = document.documentElement;
+		root.dataset.jsLoadedAt = new Date().toISOString();
+	})();
+</script>
+<!-- comment text -->
+<noscript>
+    <div class="card" style="max-width:1100px; margin: 16px auto;">
+        <strong>JavaScript is disabled.</strong>
+        <p class="muted" style="margin:6px 0 0;">
+            The page remains usable, but some interactive elements are unavailable.
+        </p>
+    </div>
+</noscript>
+</body>
+</html>

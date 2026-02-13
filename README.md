@@ -355,10 +355,36 @@ due to more function calls and allocation of values captured by closures.
 However, in many real-world cases (constants, inlining, pre-allocated pointers, non-capturing functions),
 this overhead is negligible.
 
+## Parsing
+
+Package contains an HTML parser to build a node tree from the provided input.
+```go
+n, err := htm.Parse(data, flags)
+```
+
+Available flags:
+- `ParseReuseBuffer` - parsed strings/bytes may reference the input buffer (zero allocations)
+- `ParseKeepWhitespace` - keep all whitespace text nodes
+- `ParseKeepEdgeWhitespace` - keep non-empty text nodes as-is, ignore whitespace-only text nodes
+- `ParseKeepComments` - keep comment nodes (`<!-- ... -->`) as raw nodes
+- `ParseAllowScriptContent` - allow non-empty `<script>` content
+- `ParseTopLevelRawContent` - parse exactly one top-level node and store its full inner HTML as one raw child node
+
+Default behavior (no flags):
+- `ParseReuseBuffer` is disabled
+- Whitespace outside whitespace-sensitive tags is ignored
+- Comments are ignored
+- Non-empty `<script>` content is not allowed
+
+Whitespace flag precedence:
+- `ParseKeepWhitespace` overrides `ParseKeepEdgeWhitespace`
+- If neither whitespace flag is set, parser removes whitespace-only segments and trims leading/trailing whitespace where applicable
+
+
 ## Benchmarks
 
-There are several benchmarks in the test file, 
-but for a realistic assessment, it is better to build and test your own trees.
+There are several benchmarks in the test files, 
+but for a realistic assessment, it is always better to build and test your own trees.
 
 ```go
 htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "test").Content(
@@ -368,16 +394,34 @@ htm.Div().Class("flex flex-col items-center p-7 rounded-2xl").Attr("id", "test")
 ```
 Building and rendering the tree above on a laptop takes:
 ```
-Benchmark_Build-16                 4029265     294.8 ns/op     0 B/op     0 allocs/op
-Benchmark_Render/Default-16        4277874     282.6 ns/op     0 B/op     0 allocs/op
-Benchmark_BuildRender/Default-16   1980176     606.2 ns/op     0 B/op     0 allocs/op
+Benchmark_Build-16                   4029265     294.8 ns/op      0 B/op     0 allocs/op
+Benchmark_Render/Default-16          4277874     282.6 ns/op      0 B/op     0 allocs/op
+Benchmark_BuildRender/Default-16     1980176     606.2 ns/op      0 B/op     0 allocs/op
 ```
 
 A page with header, footer and a table with 100 rows (~1400 nodes, see `htm_test.go`):
 ```
-Benchmark_Page_Build-16                10000  114562 ns/op     271 B/op     0 allocs/op
-Benchmark_Page_Render/Default-16       12933   93111 ns/op       0 B/op     0 allocs/op
-Benchmark_Page_BuildRender/Default-16   6214  206834 ns/op     427 B/op     0 allocs/op
+Benchmark_Page_Build-16                10000    114562 ns/op    271 B/op     0 allocs/op
+Benchmark_Page_Render/Default-16       12933     93111 ns/op      0 B/op     0 allocs/op
+Benchmark_Page_BuildRender/Default-16   6214    206834 ns/op    427 B/op     0 allocs/op
+```
+
+Parsing a ~30Kb page:
+```
+// Default                - 420 nodes
+Benchmark_Parse_Page/...                52030   115220 ns/op  20755 B/op  1424 allocs/op
+
+// ReuseBuffer            - 420 nodes
+Benchmark_Parse_Page/...                81014    72750 ns/op    584 B/op     6 allocs/op
+
+// Reuse + KeepEdge       - 420 nodes
+Benchmark_Parse_Page/...                81722    71658 ns/op    583 B/op     6 allocs/op
+
+// Reuse + KeepWhitespace - 800 nodes
+Benchmark_Parse_Page/...                67941    88953 ns/op    604 B/op     6 allocs/op
+
+// Reuse + Keep all       - 826 nodes
+Benchmark_Parse_Page/...                65893    91337 ns/op    595 B/op     6 allocs/op
 ```
 
 ## Contribution

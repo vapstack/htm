@@ -1302,7 +1302,7 @@ func (n *Node) Release() {
 	if n == nil || n.flag&flagOwned != 0 {
 		return
 	}
-	if !n.acquired.CompareAndSwap(true, false) {
+	if !NoPoolCheck && !n.acquired.CompareAndSwap(true, false) {
 		panic("htm: attempt to release an already released node")
 	}
 	n.Reset()
@@ -1798,6 +1798,9 @@ func WriteFloat(w io.Writer, f float64) error {
 // NoPool disables automatic pooling.
 var NoPool bool
 
+// NoPoolCheck disables pool corruption checks (CAS on Get/Release).
+var NoPoolCheck bool = false
+
 var nodePool = sync.Pool{
 	New: func() any { return newNode() },
 }
@@ -1828,7 +1831,7 @@ func Get() *Node {
 	}
 	n := nodePool.Get().(*Node)
 
-	if !n.acquired.CompareAndSwap(false, true) {
+	if !NoPoolCheck && !n.acquired.CompareAndSwap(false, true) {
 		panic("htm: got already acquired node; pool is corrupted")
 	}
 
@@ -2263,6 +2266,7 @@ var tagCharTable = [256]byte{
 	'n': 1, 'o': 1, 'p': 1, 'q': 1, 'r': 1, 's': 1, 't': 1, 'u': 1, 'v': 1, 'w': 1, 'x': 1, 'y': 1, 'z': 1,
 	'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1, 'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1,
 	'N': 1, 'O': 1, 'P': 1, 'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1, 'Y': 1, 'Z': 1,
+	//
 	'0': 2, '1': 2, '2': 2, '3': 2, '4': 2, '5': 2, '6': 2, '7': 2, '8': 2, '9': 2,
 	'_': 2, '-': 2,
 }
