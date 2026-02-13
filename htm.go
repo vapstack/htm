@@ -1205,6 +1205,50 @@ func (n *Node) count() int {
 	return count
 }
 
+// Clone creates a deep copy of n and all nested content/slot trees.
+// The clone is acquired from the pool, reuses internal buffers and does not copy pooling links.
+// Pool ownership flag is not copied so the clone can be safely released.
+func (n *Node) Clone() *Node {
+	if n == nil {
+		return nil
+	}
+	clone := Get()
+
+	clone.tag = n.tag
+	clone.flag = n.flag &^ flagOwned
+	clone.writeFn = n.writeFn
+	clone.value = n.value
+
+	clone.attrs.o = append(clone.attrs.o, n.attrs.o...)
+	clone.class.o = append(clone.class.o, n.class.o...)
+
+	clone.vars = append(clone.vars, n.vars...)
+	clone.postponed = append(clone.postponed, n.postponed...)
+
+	if len(n.content) > 0 {
+		clone.content = slices.Grow(clone.content, len(n.content))
+		for _, child := range n.content {
+			if child != nil {
+				clone.content = append(clone.content, child.Clone())
+			}
+		}
+	}
+
+	if len(n.slots) > 0 {
+		clone.slots = slices.Grow(clone.slots, len(n.slots))
+		for _, slot := range n.slots {
+			if slot.group != nil {
+				clone.slots = append(clone.slots, slotNode{
+					name:  slot.name,
+					group: slot.group.Clone(),
+				})
+			}
+		}
+	}
+
+	return clone
+}
+
 // ExtractSlot removes and returns the contents of a named slot as a Group node.
 // If slot does not exist or has no content, ExtractSlot returns nil.
 func (n *Node) ExtractSlot(name string) *Node {

@@ -215,6 +215,94 @@ func Test_Reset_RestoresPoolDefaults(t *testing.T) {
 	}
 }
 
+func Test_NodeClone_DeepCopyAndNoAttached(t *testing.T) {
+	src := Build("section").
+		Attr("id", "src").
+		Class("root").
+		Var("k", "v").
+		Content(
+			Build("span").Attr("data-x", "1").Text("child"),
+			nil,
+			Group(Text("A"), Build("b").Text("C")),
+		).
+		Slot("header", Build("h1").Text("title")).
+		Postpone(func(*Node) {})
+	defer src.Release()
+
+	src.UnsafeScript()
+	src.value = String("payload")
+	src.SetPoolingNeighbor(Text("attached"))
+
+	clone := src.Clone()
+	if clone == nil {
+		t.Fatalf("clone must not be nil")
+	}
+	defer clone.Release()
+
+	if clone == src {
+		t.Fatalf("clone must return a different node")
+	}
+	if clone.flag&flagScript == 0 {
+		t.Fatalf("clone must preserve script flag")
+	}
+	if len(clone.attached) != 0 {
+		t.Fatalf("clone must not copy attached neighbors")
+	}
+	if clone.content[0] == src.content[0] {
+		t.Fatalf("clone must deep-copy content nodes")
+	}
+	if len(clone.slots) != len(src.slots) {
+		t.Fatalf("clone must preserve slots")
+	}
+	if clone.slots[0].group == src.slots[0].group {
+		t.Fatalf("clone must deep-copy slot groups")
+	}
+	if len(clone.postponed) != len(src.postponed) {
+		t.Fatalf("clone must copy postponed mods")
+	}
+	if clone.GetVar("k").StringOrZero() != "v" {
+		t.Fatalf("clone must preserve vars")
+	}
+	if got, ok := clone.value.String(); !ok || got != "payload" {
+		t.Fatalf("clone must preserve node value")
+	}
+
+	clone.Attr("id", "clone")
+	clone.Var("k", "clone")
+	clone.content[0].Attr("data-x", "2")
+
+	if src.GetAttr("id").StringOrZero() != "src" {
+		t.Fatalf("mutating clone attrs must not change source")
+	}
+	if src.GetVar("k").StringOrZero() != "v" {
+		t.Fatalf("mutating clone vars must not change source")
+	}
+	if src.content[0].GetAttr("data-x").StringOrZero() != "1" {
+		t.Fatalf("mutating clone subtree must not change source subtree")
+	}
+}
+
+func Test_NodeClone_DropsOwnedFlag(t *testing.T) {
+	src := Build("div")
+	src.flag |= flagOwned
+
+	clone := src.Clone()
+	if clone.flag&flagOwned != 0 {
+		t.Fatalf("clone must not copy owned flag")
+	}
+	clone.Release()
+
+	src.flag &^= flagOwned
+	src.Release()
+}
+
+func Test_NodeClone_NilReceiver(t *testing.T) {
+	var n *Node
+	if n.Clone() != nil {
+		t.Fatalf("nil clone must return nil")
+	}
+}
+
 func Test_Static_CachesAndAvoidsReRender(t *testing.T) {
 	var calls int
 	fn := func() *Node {
@@ -1031,6 +1119,29 @@ func Benchmark_Count(b *testing.B) {
 	for b.Loop() {
 		n.Count()
 	}
+}
+
+func Benchmark_Clone(b *testing.B) {
+	b.Run("Small", func(b *testing.B) {
+		n := buildBasic()
+		n.Clone().Release()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Clone().Release()
+		}
+	})
+	b.Run("Large", func(b *testing.B) {
+		n := buildBenchPage()
+		n.Clone().Release()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			n.Clone().Release()
+		}
+	})
 }
 
 func makeBenchUsers(n int) []Item {
