@@ -1,171 +1,89 @@
 package svg
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
-	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/vapstack/htm"
 )
 
-type Setup struct {
-	IconFS        fs.FS
-	ImageFS       fs.FS
-	HotReload     bool
-	DefaultHeight string
-}
-
-func New(setup Setup) (*Comp, error) {
-	c := &Comp{
-		iconFS:  setup.IconFS,
-		imageFS: setup.ImageFS,
-		icons:   make(map[string][]string),
-		images:  make(map[string][]string),
-		hot:     setup.HotReload,
-		height:  setup.DefaultHeight,
-	}
-	if c.height == "" {
-		c.height = "24px"
-	}
-	return c, c.Reload()
+func New(fs fs.FS, hotReload bool) (*Comp, error) {
+	return &Comp{
+		fs:  fs,
+		hot: hotReload,
+	}, nil
 }
 
 type Comp struct {
-	iconFS  fs.FS
-	imageFS fs.FS
-
-	icons  map[string][]string
-	images map[string][]string
-
-	hot bool
-	mu  sync.RWMutex
-
-	height string
+	fs    fs.FS
+	hot   bool
+	cache sync.Map // map[string]*htm.Node
 }
 
-var viewBoxRx = regexp.MustCompile(`viewBox="(.*?)"`)
-var contentRx = regexp.MustCompile(`(?s)<svg[^>]*>(.*?)</svg>`)
-
-func (c *Comp) Reload() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := parseFiles(c.iconFS, ".", c.icons); err != nil {
-		return err
-	}
-	if err := parseFiles(c.imageFS, ".", c.images); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Comp) hotLoadIcon(name string) ([]string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := parseFile(c.iconFS, name, c.icons); err != nil {
-		return nil, err
-	}
-	parts := c.icons[strings.TrimSuffix(name, ".svg")]
-	return parts, nil
-}
-
-func (c *Comp) hotLoadImage(name string) ([]string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := parseFile(c.imageFS, name, c.images); err != nil {
-		return nil, err
-	}
-	parts := c.images[strings.TrimSuffix(name, ".svg")]
-	return parts, nil
-}
-
-func (c *Comp) Icon(name string, mods ...htm.Mod) *htm.Node {
-	var parts []string
-	if c.hot {
-		var err error
-		if parts, err = c.hotLoadIcon(name + ".svg"); err != nil {
-			return htm.Span().Text(err.Error())
-		}
-	} else {
-		parts = c.icons[name]
-	}
-	if len(parts) == 2 {
-		return htm.Build("svg").
-			Attr("viewBox", parts[0]).
-			Attr("height", c.height).
-			Apply(mods).
-			Content(htm.RawString(parts[1]))
-	}
-	return nil
-}
-
-func (c *Comp) Image(name string, mods ...htm.Mod) *htm.Node {
-	var parts []string
-	if c.hot {
-		var err error
-		if parts, err = c.hotLoadImage(name + ".svg"); err != nil {
-			return htm.Span().Text(err.Error())
-		}
-	} else {
-		parts = c.images[name]
-	}
-	if len(parts) == 2 {
-		return htm.Build("svg").
-			Attr("viewBox", parts[0]).
-			Attr("height", c.height).
-			Apply(mods).
-			Content(htm.RawString(parts[1]))
-	}
-	return nil
-}
-
-func parseFiles(sfs fs.FS, dir string, target map[string][]string) error {
-	entries, _ := fs.ReadDir(sfs, dir)
-	for _, entry := range entries {
-		name := filepath.Join(dir, entry.Name())
-		if entry.IsDir() {
-			if err := parseFiles(sfs, name, target); err != nil {
-				return err
-			}
-			continue
-		}
-		if filepath.Ext(entry.Name()) != ".svg" {
-			continue
-		}
-		if err := parseFile(sfs, name, target); err != nil {
-			return err
+func (c *Comp) Get(name string, mods ...htm.Mod) *htm.Node {
+	if !c.hot {
+		if v, ok := c.cache.Load(name); ok {
+			return v.(*htm.Node).Clone().Apply(mods)
 		}
 	}
-	return nil
+	return c.get(name, mods)
 }
 
-func parseFile(sfs fs.FS, name string, target map[string][]string) error {
-	b, err := fs.ReadFile(sfs, name)
+func (c *Comp) get(name string, mods []htm.Mod) *htm.Node {
+	n, err := c.load(name)
 	if err != nil {
-		return err
+		return htm.Span().Text(err.Error())
 	}
-	str := unsafe.String(unsafe.SliceData(b), len(b))
-	var viewBox string
-	if match := viewBoxRx.FindStringSubmatch(str); len(match) > 1 {
-		viewBox = match[1]
-	} else {
-		viewBox = "0 0 32 32"
+	if c.hot {
+		return n.Apply(mods)
 	}
-	if match := contentRx.FindStringSubmatch(str); len(match) > 1 {
-		ext := filepath.Ext(name)
-		key := name[:len(name)-len(ext)]
-		target[key] = []string{viewBox, match[1]}
-	}
-	return nil
+	return n.Clone().Apply(mods)
 }
 
-// Init initializes a package-level instance to allow direct usage of package functions Icon and Image.
-func Init(setup Setup) error {
-	c, err := New(setup)
+func (c *Comp) load(name string) (*htm.Node, error) {
+	if name == "" {
+		return nil, errors.New("svg.Get: name is empty")
+	}
+	var (
+		b []byte
+		e error
+	)
+	if hasExt(name) {
+		b, e = fs.ReadFile(c.fs, name)
+	} else {
+		b, e = fs.ReadFile(c.fs, name+".svg")
+	}
+	if e != nil {
+		return nil, e
+	}
+	n, err := htm.Parse(b, htm.ParseTopLevelRawContent, htm.ParseReuseBuffer)
+	if err != nil {
+		return nil, err
+	}
+	if c.hot {
+		return n, nil
+	}
+	v, loaded := c.cache.LoadOrStore(name, n)
+	if loaded {
+		n.Release()
+		return v.(*htm.Node), nil
+	}
+	return n, nil
+}
+
+func hasExt(name string) bool {
+	if len(name) < 5 {
+		return false
+	}
+	i := len(name) - 4
+	return name[i] == '.' && (name[i+1]|0x20) == 's' && (name[i+2]|0x20) == 'v' && (name[i+3]|0x20) == 'g'
+}
+
+// Init initializes a package-level instance to allow direct usage of package function Get.
+func Init(fs fs.FS, hotReload bool) error {
+	c, err := New(fs, hotReload)
 	if err != nil {
 		return err
 	}
@@ -175,16 +93,9 @@ func Init(setup Setup) error {
 
 var comp *Comp
 
-func Icon(name string, mods ...htm.Mod) *htm.Node {
+func Get(name string, mods ...htm.Mod) *htm.Node {
 	if comp == nil {
-		panic(fmt.Errorf("svg.Icon: package was not initialized"))
+		panic(fmt.Errorf("svg.Get: package was not initialized"))
 	}
-	return comp.Icon(name, mods...)
-}
-
-func Image(name string, mods ...htm.Mod) *htm.Node {
-	if comp == nil {
-		panic(fmt.Errorf("svg.Image: package was not initialized"))
-	}
-	return comp.Image(name, mods...)
+	return comp.Get(name, mods...)
 }
