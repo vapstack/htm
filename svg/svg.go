@@ -9,11 +9,11 @@ import (
 	"github.com/vapstack/htm"
 )
 
-func New(fs fs.FS, hotReload bool) (*Comp, error) {
+func New(fs fs.FS, hotReload bool) *Comp {
 	return &Comp{
 		fs:  fs,
 		hot: hotReload,
-	}, nil
+	}
 }
 
 type Comp struct {
@@ -82,13 +82,8 @@ func hasExt(name string) bool {
 }
 
 // Init initializes a package-level instance to allow direct usage of package function Get.
-func Init(fs fs.FS, hotReload bool) error {
-	c, err := New(fs, hotReload)
-	if err != nil {
-		return err
-	}
-	comp = c
-	return nil
+func Init(fs fs.FS, hotReload bool) {
+	comp = New(fs, hotReload)
 }
 
 var comp *Comp
